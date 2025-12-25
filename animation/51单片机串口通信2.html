@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8051单片机 串口通信模式演示</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --panel-bg: #252537;
+            --text-color: #cdd6f4;
+            --accent-color: #89b4fa;
+            --high-color: #a6e3a1; /* Green */
+            --low-color: #f38ba8;  /* Red */
+            --clock-color: #f9e2af; /* Yellow */
+            --grid-color: #45475a;
+            --start-bit: #f38ba8;
+            --data-bit: #a6e3a1;
+            --ninth-bit: #fab387;
+            --stop-bit: #89b4fa;
+        }
+
+        body {
+            font-family: 'Segoe UI', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* 左侧控制栏 */
+        .sidebar {
+            width: 320px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            z-index: 10;
+            border-right: 1px solid #333;
+        }
+
+        h2 { color: var(--accent-color); margin: 0 0 10px 0; font-size: 1.4rem; }
+        .sub-title { font-size: 0.8rem; color: #888; margin-bottom: 15px; }
+
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9rem; }
+        
+        select, input[type=text], input[type=range] {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #181825;
+            color: #fff;
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+        
+        /* 开关样式 */
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 5px;
+        }
+        input[type=checkbox] { transform: scale(1.2); cursor: pointer; }
+
+        button {
+            width: 100%;
+            background-color: var(--accent-color);
+            color: #1e1e2e;
+            border: none;
+            padding: 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: opacity 0.2s;
+            margin-top: 5px;
+        }
+        button:hover { opacity: 0.9; }
+        button.reset { background-color: #45475a; color: #fff; margin-top: 10px; }
+
+        /* 右侧演示区 */
+        .main-display {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #11111b;
+            position: relative;
+        }
+
+        .canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+
+        .bit-legend {
+            display: flex;
+            gap: 15px;
+            padding: 10px 20px;
+            background: rgba(0,0,0,0.5);
+            font-size: 0.85rem;
+        }
+        .legend-item { display: flex; align-items: center; }
+        .color-box { width: 12px; height: 12px; margin-right: 5px; border-radius: 2px; }
+
+        /* 底部知识点 */
+        .footer-notes {
+            height: 180px;
+            background-color: var(--panel-bg);
+            border-top: 1px solid var(--grid-color);
+            padding: 15px 20px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        .note-card {
+            background: rgba(255,255,255,0.05);
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 3px solid var(--accent-color);
+        }
+        .note-card h4 { margin: 0 0 8px 0; color: var(--accent-color); font-size: 1rem; }
+        .note-card p { margin: 0; font-size: 0.85rem; color: #a6adc8; line-height: 1.5; }
+
+        /* 状态灯 */
+        .status-led {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #333;
+            margin-right: 5px;
+            box-shadow: 0 0 2px #000;
+        }
+        .status-led.on { background: #a6e3a1; box-shadow: 0 0 8px #a6e3a1; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <aside class="sidebar">
+        <h2>MCU 51 Serial</h2>
+        <div class="sub-title">UART 工作模式模拟器</div>
+
+        <div class="control-group">
+            <label>SCON 模式选择 (SM0, SM1)</label>
+            <select id="mode-select">
+                <option value="0">Mode 0: 同步移位寄存器 (Fixed Baud)</option>
+                <option value="1">Mode 1: 8位 UART (Variable Baud)</option>
+                <option value="2">Mode 2: 9位 UART (Fixed Baud)</option>
+                <option value="3">Mode 3: 9位 UART (Variable Baud)</option>
+            </select>
+            <div id="mode-desc" style="font-size: 0.8rem; color: #aaa; margin-top:5px;">
+                TXD输出数据，RXD输出同步时钟。
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>SBUF 发送数据 (Hex, 00-FF)</label>
+            <input type="text" id="data-input" value="55" maxlength="2" style="text-transform:uppercase;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #888;">
+                <span>Binary: <span id="bin-display">01010101</span></span>
+            </div>
+        </div>
+
+        <div class="control-group" id="ninth-bit-group" style="display:none;">
+            <label>TB8 (第9位数据)</label>
+            <div class="checkbox-wrapper">
+                <input type="checkbox" id="tb8-input">
+                <span>Set TB8 = 1 (Parity/Multi-processor)</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>模拟波特率 (动画速度)</label>
+            <input type="range" id="speed-control" min="1" max="10" value="4">
+        </div>
+
+        <button id="send-btn">写入 SBUF (开始发送)</button>
+        <button class="reset" id="reset-btn">重置演示</button>
+
+        <div style="margin-top: auto; font-size: 0.9rem;">
+            <div><span class="status-led" id="ti-led"></span> TI (发送中断标志)</div>
+        </div>
+    </aside>
+
+    <main class="main-display">
+        <div class="bit-legend">
+            <div class="legend-item"><div class="color-box" style="background:var(--start-bit)"></div>起始位</div>
+            <div class="legend-item"><div class="color-box" style="background:var(--data-bit)"></div>数据位</div>
+            <div class="legend-item"><div class="color-box" style="background:var(--ninth-bit)"></div>TB8/校验位</div>
+            <div class="legend-item"><div class="color-box" style="background:var(--stop-bit)"></div>停止位</div>
+            <div class="legend-item" style="margin-left:20px"><div class="color-box" style="background:var(--clock-color)"></div>Mode 0 时钟</div>
+        </div>
+        <div class="canvas-container">
+            <canvas id="waveCanvas"></canvas>
+        </div>
+    </main>
+</div>
+
+<footer class="footer-notes">
+    <div class="note-card" id="note-mode0">
+        <h4>方式 0: 同步移位寄存器</h4>
+        <p><strong>原理：</strong> 数据从 TXD (P3.1) 串行输出/输入，RXD (P3.0) 输出同步时钟脉冲。常用于扩展 I/O 口。<br>
+           <strong>波特率：</strong> 固定为 Fosc / 12。<br>
+           <strong>帧格式：</strong> 8位数据，无起始/停止位。</p>
+    </div>
+    <div class="note-card" id="note-mode1">
+        <h4>方式 1: 8位 UART</h4>
+        <p><strong>原理：</strong> 标准异步通信。TXD 发送，RXD 接收。<br>
+           <strong>波特率：</strong> 可变，由定时器 1 或 2 的溢出率决定。<br>
+           <strong>帧格式：</strong> 1起始位 + 8数据位 + 1停止位 = 10位。</p>
+    </div>
+    <div class="note-card" id="note-mode2">
+        <h4>方式 2: 9位 UART (固定)</h4>
+        <p><strong>原理：</strong> 发送 9 位数据。第 9 位 (TB8) 可作奇偶校验或地址标记。<br>
+           <strong>波特率：</strong> 固定为 Fosc/64 或 Fosc/32 (SMOD=1)。<br>
+           <strong>帧格式：</strong> 1起始 + 8数据 + 1 TB8 + 1停止 = 11位。</p>
+    </div>
+    <div class="note-card" id="note-mode3">
+        <h4>方式 3: 9位 UART (可变)</h4>
+        <p><strong>原理：</strong> 帧格式同方式 2，区别在于波特率可变。<br>
+           <strong>波特率：</strong> 由定时器溢出率决定 (同方式 1)。<br>
+           <strong>帧格式：</strong> 1起始 + 8数据 + 1 TB8 + 1停止 = 11位。</p>
+    </div>
+</footer>
+
+<script>
+    // 配置与状态
+    const canvas = document.getElementById('waveCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    const state = {
+        mode: 0,
+        data: 0x55,
+        tb8: 0,
+        speed: 4,
+        isRunning: false,
+        timeline: [], // { txd: 0/1, rxd: 0/1, color: hex, label: str }
+        frame: 0,
+        ti: false
+    };
+
+    // DOM 引用
+    const ui = {
+        mode: document.getElementById('mode-select'),
+        desc: document.getElementById('mode-desc'),
+        data: document.getElementById('data-input'),
+        bin: document.getElementById('bin-display'),
+        tb8Group: document.getElementById('ninth-bit-group'),
+        tb8: document.getElementById('tb8-input'),
+        speed: document.getElementById('speed-control'),
+        sendBtn: document.getElementById('send-btn'),
+        resetBtn: document.getElementById('reset-btn'),
+        tiLed: document.getElementById('ti-led')
+    };
+
+    // 颜色常量
+    const COLORS = {
+        IDLE: '#444',
+        START: '#f38ba8', // Redish
+        DATA_0: '#313244', // Low
+        DATA_1: '#a6e3a1', // Green
+        TB8: '#fab387',   // Orange
+        STOP: '#89b4fa',  // Blue
+        CLOCK: '#f9e2af'  // Yellow
+    };
+
+    // 初始化
+    function init() {
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        updateUI();
+        drawGrid(); // 初始绘制背景
+    }
+
+    function resizeCanvas() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+        if(!state.isRunning) drawGrid();
+    }
+
+    // 事件监听
+    ui.mode.addEventListener('change', (e) => {
+        state.mode = parseInt(e.target.value);
+        updateUI();
+        resetSimulation();
+    });
+
+    ui.data.addEventListener('input', (e) => {
+        let val = parseInt(e.target.value, 16);
+        if (isNaN(val)) val = 0;
+        state.data = val;
+        ui.bin.innerText = val.toString(2).padStart(8, '0');
+    });
+
+    ui.tb8.addEventListener('change', (e) => {
+        state.tb8 = e.target.checked ? 1 : 0;
+    });
+
+    ui.speed.addEventListener('input', (e) => state.speed = parseInt(e.target.value));
+    
+    ui.sendBtn.addEventListener('click', startTransmission);
+    ui.resetBtn.addEventListener('click', resetSimulation);
+
+    function updateUI() {
+        // 更新描述
+        const descs = [
+            "TXD输出数据 (8位)，RXD输出同步移位脉冲。波特率固定。",
+            "TXD发送，RXD接收。10位帧 (Start + 8 Data + Stop)。波特率可变。",
+            "TXD发送，RXD接收。11位帧 (Start + 8 Data + TB8 + Stop)。波特率固定。",
+            "TXD发送，RXD接收。11位帧 (Start + 8 Data + TB8 + Stop)。波特率可变。"
+        ];
+        ui.desc.innerText = descs[state.mode];
+
+        // 显示/隐藏 TB8 控制
+        if (state.mode === 2 || state.mode === 3) {
+            ui.tb8Group.style.display = 'block';
+        } else {
+            ui.tb8Group.style.display = 'none';
+        }
+
+        // 高亮底部 Note
+        document.querySelectorAll('.note-card').forEach((el, idx) => {
+            el.style.opacity = (idx === state.mode) ? "1" : "0.3";
+            el.style.borderLeftColor = (idx === state.mode) ? "#89b4fa" : "#444";
+        });
+    }
+
+    function resetSimulation() {
+        state.isRunning = false;
+        state.frame = 0;
+        state.timeline = [];
+        state.ti = false;
+        ui.tiLed.classList.remove('on');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawGrid();
+    }
+
+    // --- 核心逻辑：生成波形数据 ---
+    function generateWaveform() {
+        const stepsPerBit = 20; 
+        state.timeline = [];
+
+        // 辅助函数
+        function addBit(bitVal, pinType, color, label) {
+            // pinType: 'data' (TXD) or 'clock' (RXD in Mode 0)
+            // Mode 0 特殊处理：TXD 输出数据，RXD 输出时钟
+            // Mode 1/2/3：TXD 输出数据，RXD 保持高 (模拟空闲)
+            
+            for(let i=0; i<stepsPerBit; i++) {
+                let txdVal = 1; // Default Idle High
+                let rxdVal = 1; // Default Idle High
+
+                // 逻辑：如果是 Mode 0
+                if (state.mode === 0) {
+                    txdVal = bitVal; 
+                    // 模拟 Mode 0 时钟：通常数据有效期间时钟为低，或者边沿触发
+                    // 这里简单模拟：前半周期低，后半周期高 (Shift clock)
+                    rxdVal = (i < stepsPerBit/2) ? 0 : 1; 
+                } else {
+                    // Mode 1/2/3
+                    txdVal = bitVal;
+                    rxdVal = 1; // RXD is input line, simulated as Idle High
+                }
+
+                state.timeline.push({
+                    txd: txdVal,
+                    rxd: rxdVal,
+                    color: color,
+                    label: (i === Math.floor(stepsPerBit/2)) ? label : "" // Label in center
+                });
+            }
+        }
+
+        // 1. Pre-idle
+        for(let i=0; i<20; i++) state.timeline.push({ txd: 1, rxd: 1, color: COLORS.IDLE, label: "" });
+
+        const d = state.data;
+
+        if (state.mode === 0) {
+            // Mode 0: LSB first, 8 bits only
+            for(let i=0; i<8; i++) {
+                const bit = (d >> i) & 1;
+                addBit(bit, 'data', bit ? COLORS.DATA_1 : COLORS.DATA_0, `D${i}`);
+            }
+        } 
+        else {
+            // Mode 1, 2, 3: LSB first
+            
+            // Start Bit (0)
+            addBit(0, 'data', COLORS.START, "Start");
+
+            // 8 Data Bits
+            for(let i=0; i<8; i++) {
+                const bit = (d >> i) & 1;
+                addBit(bit, 'data', bit ? COLORS.DATA_1 : COLORS.DATA_0, `D${i}`);
+            }
+
+            // 9th Bit (Mode 2/3 only)
+            if (state.mode === 2 || state.mode === 3) {
+                const tb8 = state.tb8;
+                addBit(tb8, 'data', COLORS.TB8, `TB8=${tb8}`);
+            }
+
+            // Stop Bit (1)
+            addBit(1, 'data', COLORS.STOP, "Stop");
+        }
+
+        // Post-idle
+        for(let i=0; i<40; i++) state.timeline.push({ txd: 1, rxd: 1, color: COLORS.IDLE, label: "" });
+    }
+
+    function startTransmission() {
+        if (state.isRunning) return;
+        
+        // 获取当前输入值
+        let val = parseInt(ui.data.value, 16);
+        if (isNaN(val)) val = 0;
+        state.data = val;
+
+        generateWaveform();
+        state.frame = 0;
+        state.isRunning = true;
+        state.ti = false;
+        ui.tiLed.classList.remove('on');
+        animate();
+    }
+
+    // --- 动画循环 ---
+    function animate() {
+        if (!state.isRunning) return;
+
+        // 速度控制
+        const speedMult = state.speed; 
+        state.frame += speedMult;
+
+        if (state.frame >= state.timeline.length) {
+            state.isRunning = false;
+            state.frame = state.timeline.length - 1;
+            draw();
+            // 触发中断标志
+            state.ti = true;
+            ui.tiLed.classList.add('on');
+            return;
+        }
+
+        draw();
+        requestAnimationFrame(animate);
+    }
+
+    // --- 绘图 ---
+    function drawGrid() {
+        ctx.fillStyle = "#11111b";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // 绘制轨道标签
+        ctx.font = "bold 14px monospace";
+        ctx.fillStyle = "#ccc";
+        
+        const h = canvas.height;
+        const txY = h * 0.3;
+        const rxY = h * 0.7;
+
+        ctx.fillText("TXD (P3.1) - Output", 10, txY - 40);
+        
+        if (state.mode === 0) {
+             ctx.fillText("RXD (P3.0) - Shift Clock", 10, rxY - 40);
+        } else {
+             ctx.fillText("RXD (P3.0) - Idle", 10, rxY - 40);
+        }
+        
+        ctx.strokeStyle = "#333";
+        ctx.beginPath();
+        ctx.moveTo(0, txY); ctx.lineTo(canvas.width, txY);
+        ctx.moveTo(0, rxY); ctx.lineTo(canvas.width, rxY);
+        ctx.stroke();
+    }
+
+    function draw() {
+        drawGrid();
+
+        const h = canvas.height;
+        const w = canvas.width;
+        const txCenter = h * 0.3;
+        const rxCenter = h * 0.7;
+        const amp = 30;
+        const unitW = 3; // Width per time unit
+
+        // 简单的滚动视图逻辑
+        let offsetX = 0;
+        const headX = state.frame * unitW;
+        if (headX > w * 0.8) offsetX = headX - (w * 0.8);
+
+        // 绘制 TXD
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+
+        // 辅助绘制函数
+        function drawLine(channel, centerY) {
+            // 优化性能：只遍历可见区域
+            let startIndex = Math.floor(offsetX / unitW) - 10;
+            if (startIndex < 0) startIndex = 0;
+
+            // 绘制线段
+            for (let i = startIndex; i <= state.frame; i++) {
+                const pt = state.timeline[i];
+                const prevPt = state.timeline[i-1] || pt;
+                
+                const x = i * unitW - offsetX;
+                const prevX = (i-1) * unitW - offsetX;
+                
+                const val = (channel === 'tx') ? pt.txd : pt.rxd;
+                const prevVal = (channel === 'tx') ? prevPt.txd : prevPt.rxd;
+                
+                const y = centerY + (val === 0 ? amp : -amp); // 0 is low (down), 1 is high (up)
+                const prevY = centerY + (prevVal === 0 ? amp : -amp);
+
+                ctx.beginPath();
+                // 颜色逻辑：如果是 TXD，根据状态上色；如果是 RXD(Clock)，统一黄色
+                if (channel === 'tx') ctx.strokeStyle = (val === 0 && pt.color !== COLORS.START) ? COLORS.DATA_0 : pt.color; 
+                // 特殊处理：低电平为了看清，用灰色或者保留颜色？保留颜色更好看帧结构
+                ctx.strokeStyle = pt.color;
+                if(channel === 'rx' && state.mode === 0) ctx.strokeStyle = COLORS.CLOCK;
+                if(channel === 'rx' && state.mode !== 0) ctx.strokeStyle = '#555'; // RXD Idle
+
+                // 绘制垂直跳变
+                if (i > 0 && val !== prevVal) {
+                    ctx.moveTo(x, prevY);
+                    ctx.lineTo(x, y);
+                }
+                
+                // 绘制水平线
+                if (i > 0) ctx.moveTo(x, y); 
+                else ctx.moveTo(x, y);
+                
+                ctx.lineTo(x + unitW, y); // Extend slightly
+                ctx.stroke();
+
+                // 绘制标签
+                if (channel === 'tx' && pt.label) {
+                    ctx.fillStyle = "#fff";
+                    ctx.font = "12px monospace";
+                    ctx.textAlign = "center";
+                    ctx.fillText(pt.label, x, centerY - amp - 10);
+                }
+            }
+        }
+
+        drawLine('tx', txCenter);
+        drawLine('rx', rxCenter);
+
+        // 扫描线
+        const curX = state.frame * unitW - offsetX;
+        ctx.beginPath();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.moveTo(curX, 0);
+        ctx.lineTo(curX, h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    // Start
+    init();
+
+</script>
+
+</body>
+</html>

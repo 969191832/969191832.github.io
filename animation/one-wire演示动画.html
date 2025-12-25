@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>One-Wire 通信时序深度演示 (优化版)</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text-main: #e0e0e0;
+            --text-sub: #aaaaaa;
+            --color-mcu: #448aff;   /* 主机 蓝 */
+            --color-slave: #ff5252; /* 从机 红 */
+            --color-pullup: #69f0ae; /* 上拉 绿 */
+            --color-grid: #333;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 左侧控制面板 */
+        .sidebar {
+            width: 300px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #333;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        .sidebar h2 { color: var(--color-pullup); margin-top: 0; font-size: 1.5rem; }
+        .sidebar h3 { color: var(--text-main); border-bottom: 2px solid #444; padding-bottom: 5px; margin-top: 20px; font-size: 1rem;}
+
+        .control-block { margin-bottom: 15px; }
+        
+        label { display: block; color: var(--text-sub); margin-bottom: 5px; font-size: 0.9rem; }
+        
+        /* 按钮样式 */
+        button {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: 0.2s;
+            text-align: left;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        button:hover { background: #444; border-color: var(--color-pullup); }
+        button:active { transform: translateX(2px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        button .icon { font-weight: bold; font-family: monospace; }
+        
+        button.primary { background: rgba(68, 138, 255, 0.2); border-color: var(--color-mcu); color: var(--color-mcu); }
+        button.primary:hover { background: rgba(68, 138, 255, 0.4); }
+
+        input[type=range] { width: 100%; cursor: pointer; }
+
+        /* 右侧显示区 */
+        .main-display {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* 硬件拓扑图 */
+        .topology {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #181818;
+            border-radius: 10px;
+            border: 1px solid #333;
+        }
+
+        .device {
+            width: 100px;
+            padding: 10px;
+            border: 2px solid #555;
+            border-radius: 8px;
+            text-align: center;
+            position: relative;
+            transition: 0.3s;
+        }
+
+        .device.mcu-active { border-color: var(--color-mcu); background: rgba(68, 138, 255, 0.1); box-shadow: 0 0 15px rgba(68, 138, 255, 0.3); }
+        .device.slave-active { border-color: var(--color-slave); background: rgba(255, 82, 82, 0.1); box-shadow: 0 0 15px rgba(255, 82, 82, 0.3); }
+
+        .device .label { font-weight: bold; display: block; margin-bottom: 5px; }
+        .device .state { font-size: 0.8rem; font-family: monospace; }
+
+        .pullup { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-sub); font-size: 0.8rem; }
+        .resistor-icon { width: 8px; height: 25px; background: repeating-linear-gradient(45deg, #666, #666 2px, #444 2px, #444 4px); border: 1px solid #888; margin: 2px; }
+
+        /* 示波器区域 */
+        .scope-container {
+            flex: 1;
+            background: #000;
+            border: 2px solid #444;
+            border-radius: 6px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+
+        .info-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: var(--color-pullup);
+            border: 1px solid #333;
+            pointer-events: none;
+        }
+
+        /* 底部说明 */
+        .knowledge-bar {
+            height: 180px;
+            margin-top: 20px;
+            background: #1a1a1a;
+            border-top: 2px solid #444;
+            padding: 15px 30px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .knowledge-bar ul { padding-left: 20px; margin: 0; }
+        .tag { display: inline-block; padding: 0 4px; border-radius: 3px; font-size: 0.8rem; margin-right: 5px; font-weight: bold;}
+        .tag.mcu { background: var(--color-mcu); color: #000; }
+        .tag.slave { background: var(--color-slave); color: #000; }
+        .tag.time { background: #ff9800; color: #000; }
+
+    </style>
+</head>
+<body>
+
+<!-- 左侧控制 -->
+<div class="sidebar">
+    <h2>One-Wire 演示</h2>
+    
+    <div class="control-block">
+        <label>演示速度 (Slow <-> Fast)</label>
+        <input type="range" id="speedRange" min="1" max="20" value="8">
+    </div>
+
+    <h3>单时隙演示</h3>
+    <button onclick="sim.run('reset')">
+        <span>复位 & 存在脉冲</span>
+        <span class="icon">RST</span>
+    </button>
+    <button onclick="sim.run('write0')">
+        <span>写 "0"</span>
+        <span class="icon">W0</span>
+    </button>
+    <button onclick="sim.run('write1')">
+        <span>写 "1"</span>
+        <span class="icon">W1</span>
+    </button>
+    <button onclick="sim.run('read0')">
+        <span>读 "0" (Slave拉低)</span>
+        <span class="icon">R0</span>
+    </button>
+    <button onclick="sim.run('read1')">
+        <span>读 "1" (总线释放)</span>
+        <span class="icon">R1</span>
+    </button>
+
+    <h3>完整流程</h3>
+    <button class="primary" onclick="sim.runTempLoop()">
+        <span>读取温度全过程</span>
+        <span class="icon">AUTO</span>
+    </button>
+
+    <div style="margin-top:auto; color:#666; font-size:0.8rem; text-align:center;">
+        Code Master Viz v2.0
+    </div>
+</div>
+
+<!-- 右侧主界面 -->
+<div class="main-display">
+    <!-- 硬件状态 -->
+    <div class="topology">
+        <div id="dev-mcu" class="device">
+            <span class="label">MCU (主机)</span>
+            <div class="state" id="state-mcu">释放 (Open)</div>
+        </div>
+        
+        <div class="pullup">
+            <div>VCC</div>
+            <div class="resistor-icon"></div>
+            <div>4.7kΩ</div>
+            <div style="margin-top:5px; font-size:0.7rem; color: var(--color-pullup)">弱上拉</div>
+        </div>
+
+        <div id="dev-slave" class="device">
+            <span class="label">DS18B20</span>
+            <div class="state" id="state-slave">释放 (Open)</div>
+        </div>
+    </div>
+
+    <!-- 示波器 -->
+    <div class="scope-container" id="scopeWrap">
+        <canvas id="scopeCanvas"></canvas>
+        <div class="info-overlay" id="timeDisplay">T: 0 µs</div>
+    </div>
+
+    <!-- 底部知识点 -->
+    <div class="knowledge-bar" id="infoBox">
+        <div style="color: #fff; margin-bottom: 10px; font-weight: bold;">当前状态说明：</div>
+        <div id="descText">请点击左侧按钮开始演示...</div>
+    </div>
+</div>
+
+<script>
+/**
+ * 增强版 One-Wire 动画引擎
+ */
+class ProtocolSimulator {
+    constructor() {
+        this.canvas = document.getElementById('scopeCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.container = document.getElementById('scopeWrap');
+        
+        // State
+        this.isPlaying = false;
+        this.queue = [];
+        this.currentTime = 0;
+        this.timeWindow = 1000; // Canvas displays X microseconds
+        this.pixelPerUs = 1;
+        
+        this.state = { mcu: false, slave: false }; // false=Release(High), true=Pull(Low)
+        this.history = []; // {t, v, driver}
+        this.annotations = []; // {t_start, t_end, text, type}
+        
+        this.animId = null;
+        this.lastFrameTime = 0;
+        
+        // DOM
+        this.domMcu = document.getElementById('dev-mcu');
+        this.domSlave = document.getElementById('dev-slave');
+        this.domMcuText = document.getElementById('state-mcu');
+        this.domSlaveText = document.getElementById('state-slave');
+        this.domTime = document.getElementById('timeDisplay');
+        this.domInfo = document.getElementById('descText');
+        
+        window.addEventListener('resize', () => this.resize());
+        this.resize();
+    }
+
+    resize() {
+        this.canvas.width = this.container.clientWidth;
+        this.canvas.height = this.container.clientHeight;
+        this.pixelPerUs = this.canvas.width / this.timeWindow;
+        if (!this.isPlaying && this.history.length > 0) this.draw(); // Redraw static if stopped
+    }
+
+    updateHardwareUI(mcuPull, slavePull) {
+        // MCU UI
+        if (mcuPull) {
+            this.domMcu.classList.add('mcu-active');
+            this.domMcuText.innerText = "拉低 (Pull Low)";
+            this.domMcuText.style.color = "var(--color-mcu)";
+        } else {
+            this.domMcu.classList.remove('mcu-active');
+            this.domMcuText.innerText = "释放 (Open)";
+            this.domMcuText.style.color = "#aaa";
+        }
+
+        // Slave UI
+        if (slavePull) {
+            this.domSlave.classList.add('slave-active');
+            this.domSlaveText.innerText = "拉低 (Pull Low)";
+            this.domSlaveText.style.color = "var(--color-slave)";
+        } else {
+            this.domSlave.classList.remove('slave-active');
+            this.domSlaveText.innerText = "释放 (Open)";
+            this.domSlaveText.style.color = "#aaa";
+        }
+    }
+
+    setInfo(html) {
+        this.domInfo.innerHTML = html;
+    }
+
+    // 核心序列生成器
+    run(type) {
+        if (this.isPlaying) return;
+        
+        this.history = [];
+        this.queue = [];
+        this.annotations = [];
+        this.currentTime = 0;
+        
+        // 初始化一段空闲时间
+        this.queue.push({d: 20, m:0, s:0, info: "空闲状态：总线被上拉电阻拉高"});
+
+        switch(type) {
+            case 'reset':
+                this.timeWindow = 1000;
+                this.setInfo("<b>复位序列：</b>主机拉低 >480us，释放；从机检测到上升沿后等待15-60us，拉低60-240us (存在脉冲)。");
+                this.queue.push(
+                    {d: 500, m:1, s:0, info: "<span class='tag mcu'>主机</span>拉低总线进行复位"},
+                    {d: 40, m:0, s:0, info: "<span class='tag mcu'>主机</span>释放，电阻将电压拉高"},
+                    {d: 120, m:0, s:1, info: "<span class='tag slave'>从机</span>响应存在脉冲 (Presence)"},
+                    {d: 200, m:0, s:0, info: "序列结束，进入空闲"}
+                );
+                // 标注
+                this.annotations.push({start: 20, end: 520, text: "Reset > 480us", y: 0.8});
+                this.annotations.push({start: 560, end: 680, text: "Presence 60-240us", y: 0.8});
+                break;
+
+            case 'write0':
+                this.timeWindow = 150;
+                this.setInfo("<b>写 '0' 时隙：</b>主机拉低总线至少 60us (最大120us)。从机在 15us-60us 期间采样，读到低电平即为 0。");
+                this.queue.push(
+                    {d: 80, m:1, s:0, info: "<span class='tag mcu'>主机</span>拉低保持 (>60us) 表示写0"},
+                    {d: 10, m:0, s:0, info: "<span class='tag mcu'>主机</span>释放，总线恢复高电平"}
+                );
+                this.annotations.push({start: 20, end: 100, text: "Low > 60us", y: 0.8});
+                // 采样窗口标注
+                this.annotations.push({type: 'sample', at: 20+30, text: "从机采样区"});
+                break;
+
+            case 'write1':
+                this.timeWindow = 150;
+                this.setInfo("<b>写 '1' 时隙：</b>主机拉低 <15us (通常1-10us) 然后立即释放。从机在 15us 后采样，读到高电平即为 1。");
+                this.queue.push(
+                    {d: 6, m:1, s:0, info: "<span class='tag mcu'>主机</span>短暂拉低 (<15us) 启动时隙"},
+                    {d: 64, m:0, s:0, info: "<span class='tag mcu'>主机</span>释放，写1时隙剩余时间保持高电平"}
+                );
+                this.annotations.push({start: 20, end: 26, text: "<15us", y: 0.8});
+                this.annotations.push({start: 26, end: 90, text: "恢复高电平", y: 0.2});
+                this.annotations.push({type: 'sample', at: 20+15, text: "从机采样点 (>15us)"});
+                break;
+
+            case 'read0':
+                this.timeWindow = 150;
+                this.setInfo("<b>读 '0' 时隙：</b>主机拉低 >1us 启动。从机检测到后，继续拉低总线直到 15us 以后。主机必须在 15us 内采样。");
+                this.queue.push(
+                    {d: 5, m:1, s:0, info: "<span class='tag mcu'>主机</span>启动读时隙"},
+                    {d: 5, m:0, s:0, info: "<span class='tag mcu'>主机</span>释放"},
+                    {d: 50, m:0, s:1, info: "<span class='tag slave'>从机</span>发送0 (拉低总线)"},
+                    {d: 10, m:0, s:0, info: "释放总线"}
+                );
+                this.annotations.push({type: 'marker', at: 20+15, text: "MCU采样点 (15us)", color: '#fff'});
+                this.annotations.push({start: 30, end: 80, text: "从机数据有效", y: 0.8});
+                break;
+
+            case 'read1':
+                this.timeWindow = 150;
+                this.setInfo("<b>读 '1' 时隙：</b>主机拉低 >1us 启动后释放。从机发送1即不操作，总线由电阻拉高。主机在 15us 内采样高电平。");
+                this.queue.push(
+                    {d: 5, m:1, s:0, info: "<span class='tag mcu'>主机</span>启动读时隙"},
+                    {d: 65, m:0, s:0, info: "<span class='tag slave'>从机</span>发送1 (保持释放)，上拉生效"}
+                );
+                this.annotations.push({type: 'marker', at: 20+15, text: "MCU采样点 (15us)", color: '#fff'});
+                break;
+        }
+        
+        this.resize(); // Recalc scale
+        this.startAnimation();
+    }
+
+    // 复杂宏脚本
+    async runTempLoop() {
+        if (this.isPlaying) return;
+        
+        // Helper to run sequence and wait
+        const runSeq = (type, text) => {
+            return new Promise(resolve => {
+                this.run(type);
+                if(text) this.setInfo(text);
+                const check = setInterval(() => {
+                    if(!this.isPlaying) { clearInterval(check); setTimeout(resolve, 500); }
+                }, 100);
+            });
+        }
+
+        this.setInfo("<b>Step 1: 初始化</b> - 每次操作前必须复位");
+        await runSeq('reset');
+        
+        this.setInfo("<b>Step 2: 发送指令</b> - 跳过ROM (0xCC) + 转换温度 (0x44)。这里演示发送一位 '0'");
+        await runSeq('write0');
+        
+        this.setInfo("<b>Step 3: 等待转换</b> - 此时DS18B20正在测量温度，总线保持高电平");
+        await new Promise(r => setTimeout(r, 1500));
+
+        this.setInfo("<b>Step 4: 读取数据</b> - 再次复位，发送读取指令，然后读取位。这里演示读取一位 '0'");
+        await runSeq('read0');
+        
+        this.setInfo("演示结束。");
+    }
+
+    startAnimation() {
+        this.isPlaying = true;
+        this.startTimeReal = performance.now();
+        this.startTimeSim = 0;
+        this.currentSegment = null;
+        this.segmentStartIndex = 0;
+        
+        this.animId = requestAnimationFrame((t) => this.loop(t));
+    }
+
+    loop(now) {
+        if (!this.isPlaying) return;
+        
+        // 速度控制
+        const speed = document.getElementById('speedRange').value / 5.0; 
+        
+        // 计算当前模拟时间
+        const elapsedReal = now - this.startTimeReal;
+        const elapsedSim = elapsedReal * speed; // 映射
+        
+        // 查找当前所处的指令片段
+        let timeAcc = 0;
+        let activeSeg = null;
+        
+        for(let seg of this.queue) {
+            if (elapsedSim >= timeAcc && elapsedSim < timeAcc + seg.d) {
+                activeSeg = seg;
+                // 更新UI文本
+                if(this.lastInfo !== seg.info) {
+                    this.domInfo.innerHTML = seg.info;
+                    this.lastInfo = seg.info;
+                }
+                // 更新硬件状态
+                this.updateHardwareUI(seg.m ? true:false, seg.s ? true:false);
+                
+                // 记录历史用于绘图 (仅在每个tick记录当前头位置)
+                this.currentTime = elapsedSim;
+                
+                // 确定驱动源
+                let driver = 'pullup';
+                if (seg.m) driver = 'mcu';
+                else if (seg.s) driver = 'slave';
+                
+                // 添加当前点到历史轨迹
+                // 优化：不需要每帧都push，只需在状态改变时push关键点，
+                // 但为了画“正在进行”的头，我们每帧只更新最后一个点
+                
+                // 简单处理：每帧重建末尾
+                // 实际逻辑：我们根据时间计算电压
+                break;
+            }
+            timeAcc += seg.d;
+        }
+
+        if (!activeSeg) {
+            // 结束
+            this.isPlaying = false;
+            this.updateHardwareUI(false, false);
+            this.draw();
+            return;
+        }
+
+        this.draw();
+        this.animId = requestAnimationFrame((t) => this.loop(t));
+    }
+
+    draw() {
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        const ctx = this.ctx;
+        
+        // 清空
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, w, h);
+        
+        // 绘制网格
+        this.drawGrid(w, h);
+        
+        // 绘制波形
+        this.drawWaveform(w, h);
+        
+        // 绘制标注
+        this.drawAnnotations(w, h);
+
+        // 更新时间显示
+        this.domTime.innerText = `T: ${Math.floor(this.currentTime)} µs`;
+    }
+
+    drawGrid(w, h) {
+        const ctx = this.ctx;
+        ctx.strokeStyle = "#222";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        
+        const stepUs = 50; 
+        const stepPx = stepUs * this.pixelPerUs;
+        
+        for(let x = 0; x < w; x += stepPx) {
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, h);
+            ctx.fillStyle = "#444";
+            ctx.font = "10px Arial";
+            ctx.fillText((x/this.pixelPerUs).toFixed(0), x+2, h-5);
+        }
+        
+        // 电压线
+        const yHigh = h * 0.3; // 3.3V/5V
+        const yLow = h * 0.8;  // GND
+        
+        ctx.moveTo(0, yHigh);
+        ctx.lineTo(w, yHigh);
+        ctx.moveTo(0, yLow);
+        ctx.lineTo(w, yLow);
+        
+        ctx.stroke();
+    }
+
+    drawWaveform(w, h) {
+        const ctx = this.ctx;
+        const yHigh = h * 0.3;
+        const yLow = h * 0.8;
+        
+        let timeCursor = 0;
+        let lastY = yHigh;
+        
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+
+        // 遍历队列直到 currentTime
+        for (let seg of this.queue) {
+            const segStart = timeCursor;
+            const segEnd = timeCursor + seg.d;
+            
+            // 确定该段是否完全在过去，或者是当前正在画的段
+            let drawEnd = segEnd;
+            let isCurrent = false;
+            
+            if (this.currentTime < segStart) break; // 还没发生
+            if (this.currentTime < segEnd) {
+                drawEnd = this.currentTime;
+                isCurrent = true;
+            }
+
+            const xStart = segStart * this.pixelPerUs;
+            const xEnd = drawEnd * this.pixelPerUs;
+            
+            // 逻辑电平
+            const isDrivenLow = (seg.m === 1 || seg.s === 1);
+            const targetY = isDrivenLow ? yLow : yHigh;
+            
+            // 颜色
+            let color = "var(--color-pullup)";
+            if (seg.m === 1) color = "var(--color-mcu)";
+            else if (seg.s === 1) color = "var(--color-slave)";
+
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue(
+                seg.m === 1 ? '--color-mcu' : (seg.s === 1 ? '--color-slave' : '--color-pullup')
+            );
+            
+            ctx.beginPath();
+            
+            if (isDrivenLow) {
+                // 强下拉：垂直下降
+                if (lastY !== targetY) {
+                    ctx.moveTo(xStart, lastY);
+                    ctx.lineTo(xStart, targetY);
+                } else {
+                    ctx.moveTo(xStart, targetY);
+                }
+                ctx.lineTo(xEnd, targetY);
+            } else {
+                // 弱上拉：模拟RC充电曲线 (Exponential Rise)
+                ctx.moveTo(xStart, lastY);
+                if (lastY !== targetY) {
+                    // 从低变高，画曲线
+                    // 简单的贝塞尔曲线模拟 RC 时间常数
+                    // 上升时间设为约 2-5us 的视觉宽度
+                    const riseTime = 5 * this.pixelPerUs; 
+                    ctx.quadraticCurveTo(xStart + riseTime/2, targetY, xStart + riseTime, targetY);
+                    ctx.lineTo(xEnd, targetY);
+                } else {
+                    ctx.lineTo(xEnd, targetY);
+                }
+            }
+            
+            ctx.stroke();
+            
+            // 如果是当前正在画的段，画个发光的头
+            if (isCurrent) {
+                ctx.beginPath();
+                ctx.fillStyle = "#fff";
+                ctx.arc(xEnd, targetY, 4, 0, Math.PI*2);
+                ctx.fill();
+                // 阴影
+                ctx.shadowColor = ctx.strokeStyle;
+                ctx.shadowBlur = 10;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            lastY = targetY;
+            timeCursor += seg.d;
+            if (isCurrent) break;
+        }
+    }
+
+    drawAnnotations(w, h) {
+        const ctx = this.ctx;
+        ctx.textAlign = "center";
+        ctx.font = "12px Arial";
+        
+        this.annotations.forEach(an => {
+            // 尺寸线
+            if (an.start !== undefined) {
+                const x1 = an.start * this.pixelPerUs;
+                const x2 = an.end * this.pixelPerUs;
+                const y = h * an.y;
+                
+                // 只有当这个时间段已经显示出来时才画
+                if (this.currentTime > an.start) {
+                    ctx.fillStyle = "#ffb74d";
+                    ctx.strokeStyle = "#ffb74d";
+                    ctx.lineWidth = 1;
+                    
+                    // 线
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y);
+                    ctx.lineTo(x2, y);
+                    
+                    // 箭头
+                    const arrowSz = 4;
+                    ctx.moveTo(x1, y); ctx.lineTo(x1 + arrowSz, y - arrowSz);
+                    ctx.moveTo(x1, y); ctx.lineTo(x1 + arrowSz, y + arrowSz);
+                    ctx.moveTo(x2, y); ctx.lineTo(x2 - arrowSz, y - arrowSz);
+                    ctx.moveTo(x2, y); ctx.lineTo(x2 - arrowSz, y + arrowSz);
+                    
+                    // 垂直界限
+                    ctx.moveTo(x1, y-5); ctx.lineTo(x1, y+5);
+                    ctx.moveTo(x2, y-5); ctx.lineTo(x2, y+5);
+                    ctx.stroke();
+                    
+                    // 文字背景
+                    const textW = ctx.measureText(an.text).width;
+                    ctx.fillStyle = "rgba(0,0,0,0.8)";
+                    ctx.fillRect((x1+x2)/2 - textW/2 - 2, y - 10, textW+4, 20);
+                    
+                    ctx.fillStyle = "#ffb74d";
+                    ctx.fillText(an.text, (x1+x2)/2, y + 4);
+                }
+            }
+            
+            // 采样点/特殊标记
+            if (an.type === 'marker' || an.type === 'sample') {
+                const x = an.at * this.pixelPerUs;
+                if (this.currentTime > an.at) {
+                    ctx.strokeStyle = "#fff";
+                    ctx.setLineDash([4, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, h);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    
+                    ctx.fillStyle = "#fff";
+                    ctx.fillText(an.text, x, 15);
+                }
+            }
+        });
+    }
+}
+
+const sim = new ProtocolSimulator();
+
+</script>
+</body>
+</html>

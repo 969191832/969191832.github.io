@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DAC0832 内部原理 (高对比度版)</title>
+    <style>
+        :root {
+            --bg-dark: #121212;       /* 深邃背景 */
+            --panel-bg: #1f1f23;      /* 面板背景 */
+            --accent: #00ffff;        /* 青色高亮 */
+            --accent-active: #00ff00; /* 绿色激活 */
+            --text-main: #ffffff;
+            --text-sub: #b0b0b0;
+            
+            /* 优化后的线条颜色 */
+            --line-inactive: #666666; /* 未激活线路 - 明显可见的灰色 */
+            --line-component: #cccccc; /* 组件轮廓 - 亮灰/白 */
+            --bit-on: #ff4444;
+            --bit-off: #3d3d3d;
+        }
+
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Segoe UI', 'Consolas', monospace;
+            overflow: hidden;
+        }
+
+        /* Header */
+        header {
+            padding: 12px 20px;
+            background: #18181b;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        h1 { margin: 0; font-size: 1.2rem; color: var(--accent); text-shadow: 0 0 5px rgba(0, 255, 255, 0.3); }
+
+        /* Layout */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background: var(--panel-bg);
+            border-right: 1px solid #444;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+        }
+
+        .control-section {
+            background: rgba(255,255,255,0.05);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+
+        .control-section h3 {
+            margin: 0 0 12px 0;
+            font-size: 0.95rem;
+            color: var(--accent);
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+        }
+
+        /* Bit Toggles */
+        .bit-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+        }
+        .bit-btn {
+            background: var(--bit-off);
+            border: 1px solid #555;
+            color: #ccc;
+            padding: 10px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        .bit-btn.active {
+            background: var(--bit-on);
+            color: white;
+            border-color: #ff8888;
+            box-shadow: 0 0 10px rgba(255, 68, 68, 0.4);
+        }
+        .bit-btn:hover { filter: brightness(1.2); }
+
+        /* Control Signals */
+        .signal-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .signal-btn {
+            flex: 1;
+            background: #333;
+            border: 1px solid #666;
+            color: #fff;
+            padding: 8px;
+            cursor: pointer;
+            margin-left: 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            transition: 0.1s;
+        }
+        .signal-btn.pulsed {
+            background: var(--accent);
+            color: #000;
+            box-shadow: 0 0 15px var(--accent);
+            border-color: #fff;
+        }
+        .signal-btn:active { transform: scale(0.95); }
+        
+        .mode-switch {
+            width: 100%;
+            padding: 10px;
+            background: #2e7d32;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 5px;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .mode-switch.direct { background: #ef6c00; }
+
+        /* Canvas */
+        .canvas-area {
+            flex: 1;
+            position: relative;
+            /* 更柔和的背景渐变，减少视觉干扰 */
+            background: radial-gradient(circle at center, #2a2a2e 0%, #121212 120%);
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        .overlay-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.85);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--accent);
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            font-family: 'Consolas', monospace;
+            pointer-events: none;
+            min-width: 220px;
+        }
+        .val-row { margin: 6px 0; display: flex; justify-content: space-between; align-items: center; }
+        .val-label { color: #aaa; }
+        .val-data { font-weight: bold; }
+
+        /* Bottom Info */
+        .info-panel {
+            height: 180px;
+            background: #18181b;
+            border-top: 2px solid #444;
+            padding: 15px 30px;
+            font-size: 0.9rem;
+            overflow-y: auto;
+            color: #d0d0d0;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 30px;
+        }
+        .info-col h4 { color: var(--accent); margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 5px;}
+        .info-col p, .info-col li { line-height: 1.5; color: #ccc; }
+        code { background: #333; padding: 2px 6px; border-radius: 3px; color: #ffab40; border: 1px solid #555; }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>DAC0832 内部架构可视化 <span style="font-size:0.6em; color:#888; font-weight:normal; margin-left:10px;">(High Contrast Ver.)</span></h1>
+    <div style="font-size: 0.8rem; color: #aaa;">
+        CodeMaster Labs
+    </div>
+</header>
+
+<div class="main-container">
+    <div class="sidebar">
+        <div class="control-section">
+            <h3>数据总线 (D7-D0)</h3>
+            <div class="bit-grid" id="bitContainer">
+                <!-- JS will generate buttons -->
+            </div>
+            <div style="margin-top: 15px; text-align: center; font-size: 1rem; background: #000; padding: 5px; border-radius: 4px; border: 1px solid #444;">
+                输入值: <span id="inputValDisplay" style="color: var(--accent); font-weight: bold;">0</span>
+            </div>
+        </div>
+
+        <div class="control-section">
+            <h3>控制逻辑 (双缓冲)</h3>
+            
+            <div class="signal-row">
+                <div style="line-height: 1.2;">
+                    <label style="font-weight: bold; color: #ddd;">第1级: 输入锁存</label><br>
+                    <small style="color: #888;">ILE & WR1</small>
+                </div>
+                <button class="signal-btn" id="btn-ile" onclick="pulseLatch1()">脉冲触发</button>
+            </div>
+            
+            <div class="signal-row">
+                <div style="line-height: 1.2;">
+                    <label style="font-weight: bold; color: #ddd;">第2级: DAC锁存</label><br>
+                    <small style="color: #888;">WR2 & XFER</small>
+                </div>
+                <button class="signal-btn" id="btn-xfer" onclick="pulseLatch2()">脉冲触发</button>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid #444; margin: 15px 0;">
+            <button class="mode-switch" id="modeBtn" onclick="toggleMode()">当前: 自动直通模式</button>
+        </div>
+
+        <div class="control-section">
+            <h3>参数设置</h3>
+            <label style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                <span>Vref (参考电压)</span>
+                <span id="vrefDisplay" style="color: var(--accent);">-5.0 V</span>
+            </label>
+            <input type="range" min="-10" max="10" value="-5" step="0.5" id="vrefSlider" style="width:100%; cursor: pointer;">
+        </div>
+    </div>
+
+    <div class="canvas-area">
+        <canvas id="simCanvas"></canvas>
+        <div class="overlay-info">
+            <div class="val-row"><span class="val-label">Pin Input:</span> <span class="val-data" id="disp-bus" style="color: #fff">00000000</span></div>
+            <div class="val-row"><span class="val-label">Input Reg:</span> <span class="val-data" id="disp-reg1" style="color: #ffab40">00000000</span></div>
+            <div class="val-row"><span class="val-label">DAC Reg:</span> <span class="val-data" id="disp-reg2" style="color: #00ff00">00000000</span></div>
+            <hr style="border-color: #555; margin: 10px 0;">
+            <div class="val-row"><span class="val-label">I_out1:</span> <span class="val-data" id="disp-iout" style="color: #00ffff">0.00 mA</span></div>
+            <div class="val-row"><span class="val-label">V_out:</span> <span class="val-data" id="disp-vout" style="font-size: 1.2em; color: #00ffff;">0.00 V</span></div>
+        </div>
+    </div>
+</div>
+
+<div class="info-panel">
+    <div class="info-grid">
+        <div class="info-col">
+            <h4>1. 双缓冲结构 (Double Buffering)</h4>
+            <p>为了防止数字信号在传输过程中不稳定影响模拟输出，DAC0832 采用了两级锁存器隔离：</p>
+            <ul>
+                <li><strong>输入寄存器:</strong> 暂存来自数据总线的数据。</li>
+                <li><strong>DAC 寄存器:</strong> 只有当数据稳定后，才更新此寄存器，直接驱动 D/A 转换。</li>
+            </ul>
+        </div>
+        <div class="info-col">
+            <h4>2. R-2R 倒T型电阻网络</h4>
+            <p>利用电阻分流原理将二进制数转换为电流：</p>
+            <ul>
+                <li>无论 0 或 1，电流都持续流过电阻网络，保证阻抗恒定。</li>
+                <li>每一位开关决定电流是流向 <code>Iout1</code> (地/虚地) 还是 <code>Iout2</code> (地)。</li>
+                <li>只有流向 <code>Iout1</code> 的电流参与输出电压的生成。</li>
+            </ul>
+        </div>
+        <div class="info-col">
+            <h4>3. 关键公式</h4>
+            <p>假设外接反向运算放大器：</p>
+            <p style="background:#222; padding:5px; border-left: 3px solid var(--accent);">
+                $I_{out1} = \frac{V_{ref}}{R} \times \frac{D}{256}$ <br>
+                $V_{out} = - I_{out1} \times R_{fb}$
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Configuration ---
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Colors - High Contrast
+    const C = {
+        bg: "#121212",
+        wireInactive: "#666666",   // Lighter gray for visibility
+        wireActive: "#00ff00",     // Bright Green
+        wireOutput: "#00ffff",     // Cyan for analog out
+        component: "#dddddd",      // Bright gray/white for shapes
+        text: "#ffffff",
+        textDim: "#aaaaaa",
+        busBg: "#2a2a2a",
+        busStroke: "#777777",
+        resistor: "#ffffff",       // White resistors
+        pinActive: "#ff4444"
+    };
+
+    // State
+    const state = {
+        inputBus: 0,
+        inputReg: 0,
+        dacReg: 0,
+        vref: -5.0,
+        isDirectMode: true, 
+        animTime: 0
+    };
+
+    // DOM Elements
+    const els = {
+        bitContainer: document.getElementById('bitContainer'),
+        inputDisplay: document.getElementById('inputValDisplay'),
+        vrefSlider: document.getElementById('vrefSlider'),
+        vrefDisplay: document.getElementById('vrefDisplay'),
+        modeBtn: document.getElementById('modeBtn'),
+        dispBus: document.getElementById('disp-bus'),
+        dispReg1: document.getElementById('disp-reg1'),
+        dispReg2: document.getElementById('disp-reg2'),
+        dispIout: document.getElementById('disp-iout'),
+        dispVout: document.getElementById('disp-vout'),
+    };
+
+    // Init Bits UI
+    for(let i=7; i>=0; i--) {
+        const btn = document.createElement('button');
+        btn.className = 'bit-btn';
+        btn.textContent = `D${i}`;
+        btn.onclick = () => toggleBit(i);
+        btn.id = `bit-${i}`;
+        els.bitContainer.appendChild(btn);
+    }
+
+    // --- Interaction Logic ---
+
+    function toggleBit(n) {
+        state.inputBus ^= (1 << n);
+        updateUI();
+        if (state.isDirectMode) {
+            state.inputReg = state.inputBus;
+            state.dacReg = state.inputBus;
+        }
+    }
+
+    function pulseLatch1() {
+        state.inputReg = state.inputBus;
+        triggerAnim('latch1');
+    }
+
+    function pulseLatch2() {
+        state.dacReg = state.inputReg;
+        triggerAnim('latch2');
+    }
+
+    function toggleMode() {
+        state.isDirectMode = !state.isDirectMode;
+        els.modeBtn.classList.toggle('direct');
+        if (state.isDirectMode) {
+            els.modeBtn.textContent = "当前: 自动直通模式 (Auto)";
+            state.inputReg = state.inputBus;
+            state.dacReg = state.inputBus;
+        } else {
+            els.modeBtn.textContent = "当前: 手动双缓冲模式 (Manual)";
+        }
+    }
+
+    els.vrefSlider.addEventListener('input', (e) => {
+        state.vref = parseFloat(e.target.value);
+        els.vrefDisplay.innerText = state.vref.toFixed(1) + " V";
+    });
+
+    function updateUI() {
+        for(let i=0; i<8; i++) {
+            const btn = document.getElementById(`bit-${i}`);
+            if ((state.inputBus >> i) & 1) btn.classList.add('active');
+            else btn.classList.remove('active');
+        }
+        els.inputDisplay.innerText = `${state.inputBus} (0x${state.inputBus.toString(16).toUpperCase().padStart(2,'0')})`;
+    }
+
+    // --- Animation System ---
+    let animations = [];
+    function triggerAnim(type) {
+        animations.push({ type: type, age: 0 });
+    }
+
+    function toBin(val) { return val.toString(2).padStart(8, '0'); }
+
+    // --- Canvas Helper Functions ---
+    
+    function drawLine(x1, y1, x2, y2, color, width = 2, glow = false) {
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        if (glow) {
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = color;
+        } else {
+            ctx.shadowBlur = 0;
+        }
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.shadowBlur = 0; // Reset
+    }
+
+    function drawResistor(x, y, vertical) {
+        ctx.beginPath();
+        ctx.strokeStyle = C.resistor;
+        ctx.lineWidth = 2;
+        const size = 15; 
+        if (vertical) {
+            // Vertical ZigZag
+            ctx.moveTo(x, y);
+            ctx.lineTo(x - 4, y + 4);
+            ctx.lineTo(x + 4, y + 8);
+            ctx.lineTo(x - 4, y + 12);
+            ctx.lineTo(x + 4, y + 16);
+            ctx.lineTo(x - 4, y + 20);
+            ctx.lineTo(x + 4, y + 24);
+            ctx.lineTo(x, y + 28);
+        } else {
+            // Horizontal ZigZag
+            // Not used much in this specific T-network view but defined for completeness
+        }
+        ctx.stroke();
+        return vertical ? 28 : 0; // Return length
+    }
+
+    // --- Main Draw Functions ---
+
+    function resize() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function drawBus(x, y, w, h, val, label, activeColor) {
+        // Box
+        ctx.fillStyle = C.busBg;
+        ctx.strokeStyle = C.busStroke;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = "rgba(0,0,0,0.5)";
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeRect(x, y, w, h);
+        ctx.shadowBlur = 0;
+
+        // Label
+        ctx.fillStyle = C.textDim;
+        ctx.font = "12px Arial";
+        ctx.textAlign = "right";
+        ctx.fillText(label, x - 10, y + h/2 + 4);
+
+        // Bits
+        const cellW = w / 8;
+        for (let i=0; i<8; i++) {
+            let bit = (val >> (7-i)) & 1;
+            let cx = x + cellW*i + cellW/2;
+            let cy = y + h/2;
+            
+            ctx.fillStyle = bit ? activeColor : "#444";
+            ctx.beginPath();
+            ctx.arc(cx, cy, 8, 0, Math.PI*2);
+            ctx.fill();
+            if (bit) {
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = activeColor;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+            
+            ctx.fillStyle = bit ? "#000" : "#888";
+            ctx.font = "bold 10px monospace";
+            ctx.textAlign = "center";
+            ctx.fillText(7-i, cx, cy+3);
+        }
+    }
+
+    function drawR2RNetwork(x, y, width) {
+        const bitSpacing = width / 8;
+        const bits = state.dacReg;
+
+        // Main Vref Line (Top)
+        drawLine(x, y, x + width, y, C.wireInactive, 3);
+        ctx.fillStyle = C.text;
+        ctx.textAlign = "right";
+        ctx.fillText("Vref Input", x - 10, y + 4);
+
+        // Draw Ladder
+        for (let i = 0; i < 8; i++) {
+            // Calculate position: D7 (MSB) on left, D0 (LSB) on right
+            let bx = x + (i * bitSpacing) + bitSpacing/2;
+            let bitVal = (bits >> (7-i)) & 1; 
+            
+            // 1. Top Vertical Line to Resistor
+            drawLine(bx, y, bx, y + 20, C.wireInactive, 2);
+            
+            // 2. The Resistor (2R)
+            let rLen = drawResistor(bx, y + 20, true);
+            
+            // 3. Line from Resistor to Switch
+            let switchJoinY = y + 20 + rLen;
+            drawLine(bx, switchJoinY, bx, switchJoinY + 20, C.wireInactive, 2);
+
+            // 4. The Switch
+            const switchY = switchJoinY + 20;
+            const contactLeft = bx - 15; // Iout1 (Sum)
+            const contactRight = bx + 15; // Iout2 (GND)
+
+            // Contacts
+            ctx.fillStyle = "#fff";
+            ctx.beginPath(); ctx.arc(contactLeft, switchY + 30, 3, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(contactRight, switchY + 30, 3, 0, Math.PI*2); ctx.fill();
+
+            // Labels for contacts (Only on first one to reduce clutter)
+            if (i === 0) {
+                ctx.fillStyle = C.wireOutput;
+                ctx.font = "10px Arial";
+                ctx.fillText("1", contactLeft - 5, switchY + 25);
+                ctx.fillStyle = "#999";
+                ctx.fillText("0", contactRight + 5, switchY + 25);
+            }
+
+            // Switch Arm
+            ctx.beginPath();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = bitVal ? C.wireActive : "#999"; 
+            ctx.moveTo(bx, switchY);
+            if (bitVal) {
+                // To Left (Active)
+                ctx.lineTo(contactLeft, switchY + 30);
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = C.wireActive;
+            } else {
+                // To Right (GND)
+                ctx.lineTo(contactRight, switchY + 30);
+                ctx.shadowBlur = 0;
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // 5. Current Particles
+            if (bitVal) {
+                // Animated dots flowing down and left
+                let offset = (state.animTime * 60) % 60;
+                // Down part
+                ctx.fillStyle = C.wireActive;
+                ctx.beginPath();
+                ctx.arc(bx, y + offset, 2, 0, Math.PI*2);
+                ctx.fill();
+            }
+        }
+
+        // Summing Line (Iout1) - The "Active" collection line
+        const sumY = y + 100;
+        drawLine(x, sumY, x + width + 40, sumY, C.wireOutput, 3, true); // Glows cyan
+        ctx.fillStyle = C.wireOutput;
+        ctx.textAlign = "left";
+        ctx.font = "bold 12px Arial";
+        ctx.fillText("Iout1 (Current Bus)", x + width + 50, sumY + 5);
+
+        // Ground Line (Iout2) - The "Dump" line
+        const gndY = y + 120;
+        drawLine(x, gndY, x + width + 20, gndY, "#777", 2); // Clearer gray
+        ctx.fillStyle = "#aaa";
+        ctx.fillText("Iout2 (GND)", x + width + 30, gndY + 5);
+        
+        // OpAmp Visual
+        const opX = x + width + 120;
+        const opY = sumY;
+        
+        // OpAmp Triangle
+        ctx.beginPath();
+        ctx.fillStyle = "#222";
+        ctx.strokeStyle = C.component;
+        ctx.lineWidth = 2;
+        ctx.moveTo(opX, opY - 35);
+        ctx.lineTo(opX, opY + 35);
+        ctx.lineTo(opX + 60, opY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        // OpAmp Inputs
+        ctx.fillStyle = "#fff";
+        ctx.font = "14px Arial";
+        ctx.fillText("-", opX + 5, opY - 10);
+        ctx.fillText("+", opX + 5, opY + 20);
+        
+        // Connection from Sum Line to OpAmp (-)
+        ctx.setLineDash([4, 4]);
+        drawLine(x + width + 40, sumY, opX, opY - 10, C.wireOutput, 2);
+        ctx.setLineDash([]);
+
+        // Ground to OpAmp (+)
+        drawLine(opX - 20, opY + 20, opX, opY + 20, "#777", 2);
+        // Ground symbol
+        let gx = opX - 20; let gy = opY + 20;
+        drawLine(gx, gy, gx, gy+10, "#777", 2);
+        drawLine(gx-8, gy+10, gx+8, gy+10, "#777", 2);
+        drawLine(gx-5, gy+14, gx+5, gy+14, "#777", 2);
+        drawLine(gx-2, gy+18, gx+2, gy+18, "#777", 2);
+
+        // Output Pin
+        drawLine(opX + 60, opY, opX + 90, opY, C.wireOutput, 3, true);
+        ctx.beginPath();
+        ctx.arc(opX + 90, opY, 4, 0, Math.PI*2);
+        ctx.fillStyle = C.wireOutput;
+        ctx.fill();
+        ctx.fillText("Vout", opX + 95, opY + 5);
+    }
+
+    function drawArrow(x, y, h) {
+        ctx.strokeStyle = "#666";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + h);
+        // Arrowhead
+        ctx.moveTo(x - 4, y + h - 6);
+        ctx.lineTo(x, y + h);
+        ctx.lineTo(x + 4, y + h - 6);
+        ctx.stroke();
+    }
+
+    function render() {
+        state.animTime += 0.03;
+        
+        // Clear
+        ctx.fillStyle = C.bg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Center calculations
+        const centerX = canvas.width / 2;
+        const startY = 40;
+        const regW = 340; // Slightly wider
+        const regH = 36;
+        const regX = centerX - regW/2 - 50; // Shift left slightly to fit OpAmp
+
+        // 1. Pin Layer
+        drawBus(regX, startY, regW, regH, state.inputBus, "Pins D7-D0", C.pinActive);
+        
+        // Arrows Pin -> Reg1
+        for(let i=0; i<8; i++) drawArrow(regX + (regW/8)*i + (regW/16), startY + regH, 30);
+        
+        // 2. Reg1 Layer
+        let r1Color = "#ff9800";
+        if (animations.some(a => a.type === 'latch1' && a.age < 15)) {
+            r1Color = "#ffffff"; // Flash white
+            ctx.globalAlpha = 0.5;
+            ctx.fillStyle = "#ff9800";
+            ctx.fillRect(regX - 5, startY + 70 - 5, regW + 10, regH + 10); // Glow rect
+            ctx.globalAlpha = 1.0;
+        }
+        drawBus(regX, startY + 70, regW, regH, state.inputReg, "Input Latch", r1Color);
+
+        // Arrows Reg1 -> Reg2
+        for(let i=0; i<8; i++) drawArrow(regX + (regW/8)*i + (regW/16), startY + 70 + regH, 30);
+
+        // 3. Reg2 Layer
+        let r2Color = C.wireActive;
+        if (animations.some(a => a.type === 'latch2' && a.age < 15)) {
+            r2Color = "#ffffff";
+            ctx.globalAlpha = 0.5;
+            ctx.fillStyle = C.wireActive;
+            ctx.fillRect(regX - 5, startY + 140 - 5, regW + 10, regH + 10);
+            ctx.globalAlpha = 1.0;
+        }
+        drawBus(regX, startY + 140, regW, regH, state.dacReg, "DAC Register", r2Color);
+
+        // Arrows Reg2 -> Network
+        for(let i=0; i<8; i++) drawArrow(regX + (regW/8)*i + (regW/16), startY + 140 + regH, 30);
+
+        // 4. R-2R Network
+        drawR2RNetwork(regX, startY + 210, regW);
+
+        // Clean animations
+        animations.forEach(a => a.age++);
+        animations = animations.filter(a => a.age < 20);
+
+        // Calc Values
+        let vout = -(state.dacReg / 256.0) * state.vref;
+        els.dispVout.innerText = vout.toFixed(2) + " V";
+        els.dispBus.innerText = toBin(state.inputBus);
+        els.dispReg1.innerText = toBin(state.inputReg);
+        els.dispReg2.innerText = toBin(state.dacReg);
+        els.dispIout.innerText = ((state.dacReg/255)*2).toFixed(2) + " mA"; // Dummy scale
+
+        requestAnimationFrame(render);
+    }
+
+    render();
+
+</script>
+</body>
+</html>

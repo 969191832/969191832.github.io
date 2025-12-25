@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>51单片机 UART 串口通信原理演示 - 代码大师版</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --panel-bg: #252535;
+            --text-color: #cdd6f4;
+            --accent-color: #89b4fa;
+            --success-color: #a6e3a1;
+            --high-level: #f38ba8; /* 逻辑1 高电平颜色 */
+            --low-level: #89b4fa;  /* 逻辑0 低电平颜色 */
+            --wire-color: #585b70;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            grid-template-rows: 1fr 250px;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 左侧控制面板 */
+        .sidebar {
+            background-color: var(--panel-bg);
+            padding: 20px;
+            border-right: 1px solid #313244;
+            grid-row: 1 / 2;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h2 { margin-top: 0; color: var(--accent-color); }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label { font-size: 0.9em; color: #a6adc8; }
+        
+        input, select {
+            background: #181825;
+            border: 1px solid #45475a;
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        button {
+            background: var(--accent-color);
+            color: #1e1e2e;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        button:hover { filter: brightness(1.1); }
+        button:disabled { background: #45475a; cursor: not-allowed; }
+
+        .status-log {
+            flex-grow: 1;
+            background: #11111b;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            overflow-y: auto;
+            border-radius: 4px;
+            border: 1px solid #45475a;
+        }
+
+        /* 右侧演示区域 */
+        .display-area {
+            position: relative;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(circle at center, #2b2b3b 0%, #1e1e2e 100%);
+        }
+
+        .hardware-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 80%;
+            margin-bottom: 40px;
+        }
+
+        .chip {
+            width: 120px;
+            height: 120px;
+            background: #313244;
+            border: 2px solid var(--accent-color);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 15px rgba(137, 180, 250, 0.2);
+            position: relative;
+        }
+
+        .chip-label { font-weight: bold; margin-bottom: 10px; }
+        .register-box {
+            background: #11111b;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            border: 1px solid #585b70;
+        }
+
+        /* 连线 */
+        .wire-path {
+            flex-grow: 1;
+            height: 4px;
+            background: var(--wire-color);
+            position: relative;
+            margin: 0 20px;
+        }
+
+        .signal-packet {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: var(--high-level);
+            border-radius: 50%;
+            top: -8px;
+            left: 0;
+            box-shadow: 0 0 10px var(--high-level);
+            opacity: 0;
+        }
+
+        /* 示波器区域 */
+        .oscilloscope {
+            width: 90%;
+            height: 150px;
+            background: #000;
+            border: 2px solid #45475a;
+            border-radius: 6px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: flex-end;
+            padding-left: 10px;
+        }
+
+        .grid-lines {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: linear-gradient(#333 1px, transparent 1px),
+                              linear-gradient(90deg, #333 1px, transparent 1px);
+            background-size: 20px 20px;
+            z-index: 0;
+        }
+
+        .wave-label {
+            position: absolute;
+            color: #0f0;
+            font-family: monospace;
+            top: 5px;
+            left: 5px;
+            z-index: 2;
+        }
+
+        .wave-segment {
+            height: 4px;
+            background: #0f0;
+            position: relative;
+            transition: height 0.1s;
+            box-shadow: 0 0 5px #0f0;
+            z-index: 1;
+        }
+        
+        /* 高电平波形位置 */
+        .wave-high { height: 80%; border-bottom: none; }
+        /* 低电平波形位置 */
+        .wave-low { height: 20%; border-top: none; }
+        
+        .bit-info {
+            position: absolute;
+            bottom: 5px;
+            font-size: 10px;
+            color: #fff;
+            text-align: center;
+            width: 100%;
+        }
+
+        /* 下方知识点 */
+        .knowledge-base {
+            grid-column: 1 / 3;
+            background: #181825;
+            border-top: 1px solid var(--accent-color);
+            padding: 20px 40px;
+            overflow-y: auto;
+        }
+
+        .knowledge-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .k-card h3 { color: var(--success-color); font-size: 1.1em; margin-bottom: 8px; }
+        .k-card p { font-size: 0.9em; line-height: 1.5; color: #bac2de; }
+        code { background: #313244; padding: 2px 5px; border-radius: 3px; color: #fab387; }
+
+        /* 动画类 */
+        @keyframes moveBit {
+            0% { left: 0; opacity: 1; }
+            100% { left: 100%; opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 左侧控制面板 -->
+    <div class="sidebar">
+        <h2>⚙️ UART 控制台</h2>
+        
+        <div class="control-group">
+            <label for="dataInput">发送数据 (Hex, 1字节)</label>
+            <input type="text" id="dataInput" value="55" maxlength="2" placeholder="例如: 55, A3, FF">
+        </div>
+
+        <div class="control-group">
+            <label for="speedSelect">演示速度 (波特率模拟)</label>
+            <select id="speedSelect">
+                <option value="1000">极慢 (教学模式)</option>
+                <option value="500" selected>正常</option>
+                <option value="200">快速</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <button id="sendBtn" onclick="startTransmission()">发送数据 (SBUF = Data)</button>
+            <button id="resetBtn" onclick="resetDisplay()" style="background-color: #f38ba8;">复位</button>
+        </div>
+
+        <div class="status-log" id="logArea">
+            > 系统就绪...<br>
+            > UART 模式 1 (8位UART)<br>
+            > 等待发送...
+        </div>
+    </div>
+
+    <!-- 右侧演示区域 -->
+    <div class="display-area">
+        <div class="hardware-container">
+            <!-- 51 MCU -->
+            <div class="chip">
+                <div class="chip-label">8051 MCU</div>
+                <div class="register-box">TXD (P3.1)</div>
+                <div class="register-box" style="margin-top:5px; color:var(--accent-color)">SBUF: <span id="sbufDisp">00</span></div>
+            </div>
+
+            <!-- 传输线 -->
+            <div class="wire-path" id="wire">
+                <div class="signal-packet" id="packet"></div>
+            </div>
+
+            <!-- 接收端 -->
+            <div class="chip" style="border-color: var(--success-color);">
+                <div class="chip-label">接收端 (RX)</div>
+                <div class="register-box">RXD</div>
+                <div class="register-box" style="margin-top:5px; color:var(--success-color)">Recv: <span id="recvDisp">--</span></div>
+            </div>
+        </div>
+
+        <!-- 示波器 -->
+        <div class="oscilloscope" id="scope">
+            <div class="grid-lines"></div>
+            <div class="wave-label">逻辑分析仪 (Logic Analyzer) - TXD Line</div>
+            <!-- 波形将通过JS动态生成 -->
+        </div>
+    </div>
+
+    <!-- 下方知识点 -->
+    <div class="knowledge-base">
+        <div class="knowledge-grid">
+            <div class="k-card">
+                <h3>1. 数据帧格式 (Frame)</h3>
+                <p>标准的Mode 1通信包含10位数据：<br>
+                • <b>起始位(Start Bit)</b>: 1位，始终为低电平(0)。<br>
+                • <b>数据位(Data Bits)</b>: 8位，<b>低位(LSB)在前</b>。<br>
+                • <b>停止位(Stop Bit)</b>: 1位，始终为高电平(1)。</p>
+            </div>
+            <div class="k-card">
+                <h3>2. SBUF 寄存器</h3>
+                <p><code>SBUF</code> 是串行口数据缓冲寄存器。物理上分为两个独立的寄存器：一个用于发送（写入时），一个用于接收（读取时）。指令 <code>MOV SBUF, A</code> 触发发送。</p>
+            </div>
+            <div class="k-card">
+                <h3>3. 波特率 (Baud Rate)</h3>
+                <p>决定了通信的速度。在51单片机中，波特率通常由<b>定时器1</b>的溢出率决定。
+                <br>公式: <code>波特率 = (2^SMOD / 32) × T1溢出率</code>。</p>
+            </div>
+            <div class="k-card">
+                <h3>4. 硬件引脚</h3>
+                <p>• <b>TXD (P3.1)</b>: 发送数据引脚。<br>
+                • <b>RXD (P3.0)</b>: 接收数据引脚。<br>
+                空闲状态下，线路保持<b>高电平(1)</b>。</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const sbufDisp = document.getElementById('sbufDisp');
+        const recvDisp = document.getElementById('recvDisp');
+        const logArea = document.getElementById('logArea');
+        const scope = document.getElementById('scope');
+        const sendBtn = document.getElementById('sendBtn');
+        const packet = document.getElementById('packet');
+
+        let isTransmitting = false;
+
+        function log(msg) {
+            logArea.innerHTML += `> ${msg}<br>`;
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function hexToBin(hex) {
+            let dec = parseInt(hex, 16);
+            if (isNaN(dec)) return "00000000";
+            let bin = dec.toString(2).padStart(8, "0");
+            return bin; // 如 "01010101"
+        }
+
+        function createWaveSegment(bitValue, width, label) {
+            const el = document.createElement('div');
+            el.className = bitValue === 1 ? 'wave-segment wave-high' : 'wave-segment wave-low';
+            el.style.width = '0px'; // 初始宽度
+            el.style.borderRight = '1px dashed #333';
+            
+            const text = document.createElement('div');
+            text.className = 'bit-info';
+            text.innerText = label;
+            el.appendChild(text);
+            
+            return el;
+        }
+
+        function resetDisplay() {
+            scope.innerHTML = '<div class="grid-lines"></div><div class="wave-label">逻辑分析仪 (Logic Analyzer) - TXD Line</div>';
+            recvDisp.innerText = "--";
+            sbufDisp.innerText = "00";
+            packet.style.opacity = 0;
+            isTransmitting = false;
+            sendBtn.disabled = false;
+            log("系统复位。");
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function startTransmission() {
+            if (isTransmitting) return;
+            
+            const hexInput = document.getElementById('dataInput').value.toUpperCase() || "00";
+            const speed = parseInt(document.getElementById('speedSelect').value);
+            
+            // 校验输入
+            if (!/^[0-9A-F]{1,2}$/.test(hexInput)) {
+                alert("请输入有效的1字节十六进制数 (00-FF)");
+                return;
+            }
+
+            isTransmitting = true;
+            sendBtn.disabled = true;
+            
+            // 1. 准备数据
+            sbufDisp.innerText = hexInput;
+            recvDisp.innerText = "--";
+            
+            // 获取二进制字符串 (MSB -> LSB): "10100011"
+            const binStr = hexToBin(hexInput);
+            // 串口发送是 LSB (低位) 在前，所以我们要反转数组方便遍历
+            // 原始: D7 D6 ... D0 -> 发送顺序: Start, D0, D1 ... D7, Stop
+            const dataBits = binStr.split('').reverse().map(Number); // [D0, D1, ..., D7]
+            
+            // 构建完整的帧：起始位(0) + 数据位(8位) + 停止位(1)
+            const frame = [0, ...dataBits, 1];
+            const frameLabels = ["Start", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "Stop"];
+
+            log(`SBUF写入: 0x${hexInput}`);
+            log(`二进制: ${binStr} (LSB First发送)`);
+
+            // 清空示波器
+            scope.innerHTML = '<div class="grid-lines"></div><div class="wave-label">逻辑分析仪 (Logic Analyzer) - TXD Line</div>';
+
+            // 2. 开始模拟发送
+            for (let i = 0; i < frame.length; i++) {
+                let bit = frame[i];
+                let label = frameLabels[i];
+
+                // 更新日志
+                if (i === 0) log("发送起始位 (Logic 0)");
+                else if (i === 9) log("发送停止位 (Logic 1)");
+                else log(`发送数据位 ${label}: ${bit}`);
+
+                // 动画：线上的小球
+                packet.style.backgroundColor = bit === 1 ? 'var(--high-level)' : 'var(--low-level)';
+                packet.style.boxShadow = `0 0 10px ${bit === 1 ? 'var(--high-level)' : 'var(--low-level)'}`;
+                packet.style.transition = `left ${speed}ms linear`;
+                
+                // 重置小球动画
+                packet.style.opacity = 1;
+                packet.style.left = '0%';
+                await sleep(20); // 给一点点DOM渲染时间
+                packet.style.left = '100%';
+
+                // 绘制波形
+                const segment = createWaveSegment(bit, 0, `${label}(${bit})`);
+                scope.appendChild(segment);
+                
+                // 动态拉长波形模拟时间流逝
+                // 使用 setTimeout 让CSS transition生效
+                setTimeout(() => {
+                    segment.style.width = (scope.clientWidth / 11) + 'px'; // 均分宽度
+                }, 10);
+
+                await sleep(speed);
+            }
+
+            // 3. 结束
+            packet.style.opacity = 0;
+            recvDisp.innerText = hexInput;
+            log(`接收完成: 0x${hexInput}`);
+            log("触发中断 RI=1 (接收中断)");
+            
+            // 绘制一段空闲高电平
+            const idle = createWaveSegment(1, 0, "Idle");
+            scope.appendChild(idle);
+            setTimeout(() => { idle.style.width = '50px'; }, 10);
+
+            isTransmitting = false;
+            sendBtn.disabled = false;
+        }
+    </script>
+</body>
+</html>

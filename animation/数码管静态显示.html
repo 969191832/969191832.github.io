@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>51单片机数码管显示 (共阳/共阴切换版)</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --success-color: #2ecc71; /* 绿色 - 低电平/有效 */
+            --danger-color: #e74c3c;  /* 红色 - 高电平/有效 */
+            --bg-color: #f4f7f6;
+            --panel-bg: #ffffff;
+            --led-off: #2a2a2a;
+            --led-on: #ff3333;
+            --wire-inactive: #bdc3c7;
+            --wire-active-low: #2ecc71; /* 共阳极导通色 */
+            --wire-active-high: #e74c3c; /* 共阴极导通色 */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* --- 左侧控制栏 --- */
+        .sidebar {
+            width: 340px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid #ddd;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+            z-index: 10;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+        }
+
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+
+        /* 模式选择开关 */
+        .mode-switch {
+            display: flex;
+            background: #eee;
+            border-radius: 6px;
+            padding: 4px;
+            margin-bottom: 10px;
+        }
+        .mode-option {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.2s;
+            color: #777;
+        }
+        .mode-option.active {
+            background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            color: var(--primary-color);
+        }
+
+        /* 按钮组 */
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            display: flex; justify-content: center; align-items: center; gap: 5px;
+        }
+        .btn-play { background-color: var(--primary-color); color: white; }
+        .btn-play.paused { background-color: #27ae60; }
+        .btn-step { background-color: #f39c12; color: white; }
+        .btn-step:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+
+        /* 信息面板 */
+        .info-panel {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: center; }
+        .highlight { color: #f1c40f; font-weight: bold; }
+        .val-display { color: #2ecc71; font-weight: bold; }
+        
+        /* --- 右侧演示区 --- */
+        .demo-area {
+            flex: 1;
+            background-color: #e8ebed; /* 稍微深一点的背景衬托连线 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .circuit-board {
+            display: flex;
+            align-items: center;
+            gap: 150px; /* 增加间距以展示曲线 */
+            padding: 50px 80px;
+            background: #d5dbdb;
+            border-radius: 15px;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+            border: 1px solid #bdc3c7;
+            position: relative;
+        }
+
+        /* 单片机 */
+        .mcu {
+            width: 130px;
+            height: 320px;
+            background: #34495e;
+            border-radius: 6px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.3);
+            z-index: 2;
+        }
+        .mcu::after {
+            content: "8051 MCU";
+            position: absolute;
+            bottom: 15px; width: 100%; text-align: center;
+            color: rgba(255,255,255,0.3); font-weight: bold;
+        }
+
+        .port-group {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 240px;
+            width: 100%;
+            padding: 20px 0;
+        }
+
+        .pin {
+            height: 20px;
+            width: 25px;
+            background: #bdc3c7;
+            align-self: flex-end;
+            position: relative;
+            display: flex;
+            align-items: center;
+            border-radius: 2px 0 0 2px;
+        }
+        .pin span {
+            position: absolute; right: 30px;
+            color: white; font-family: monospace; font-size: 13px;
+        }
+        /* 引脚状态指示灯 */
+        .pin-led {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #7f8c8d; /* 默认灰 */
+            margin-left: 4px;
+            border: 1px solid rgba(0,0,0,0.2);
+            transition: background 0.2s;
+        }
+        /* 红色高电平 */
+        .pin-led.high { background: var(--danger-color); box-shadow: 0 0 5px var(--danger-color); }
+        /* 绿色低电平 */
+        .pin-led.low { background: var(--success-color); box-shadow: 0 0 5px var(--success-color); }
+
+        /* 数码管模块 */
+        .display-module {
+            background: #222;
+            padding: 25px;
+            border-radius: 10px;
+            border: 4px solid #555;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 2;
+            position: relative;
+        }
+        /* 隐形连接点容器，位于模块左侧 */
+        .connector-strip {
+            position: absolute;
+            left: -10px;
+            top: 20px;
+            bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .connector-point { width: 4px; height: 4px; background: #555; border-radius: 50%; }
+
+        /* 7段数码管绘制 */
+        .seven-segment {
+            width: 110px;
+            height: 190px;
+            position: relative;
+            transform: skewX(-6deg); 
+        }
+
+        .seg {
+            position: absolute;
+            background-color: var(--led-off);
+            transition: background-color 0.1s, box-shadow 0.1s;
+            border-radius: 4px;
+            /* 增加一点立体感 */
+            border: 1px solid rgba(0,0,0,0.5);
+        }
+        .seg.on {
+            background-color: var(--led-on);
+            box-shadow: 0 0 18px var(--led-on);
+            border-color: #ff9999;
+        }
+
+        /* 各段位置调整 */
+        .seg-h { height: 14px; width: 64px; left: 23px; } /* 横 */
+        .seg-v { width: 14px; height: 70px; } /* 竖 */
+        
+        .seg-a { top: 0; }
+        .seg-g { top: 88px; }
+        .seg-d { bottom: 0; }
+
+        .seg-f { top: 10px; left: 6px; }
+        .seg-b { top: 10px; right: 6px; }
+        .seg-e { bottom: 10px; left: 6px; }
+        .seg-c { bottom: 10px; right: 6px; }
+
+        .seg-dp {
+            width: 14px; height: 14px; border-radius: 50%;
+            right: -10px; bottom: 0;
+        }
+
+        /* 连线层 SVG */
+        .wires-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        path {
+            fill: none;
+            stroke: var(--wire-inactive);
+            stroke-width: 3;
+            stroke-linecap: round;
+            transition: stroke 0.2s;
+        }
+        /* 连线激活样式 */
+        path.active-low { stroke: var(--wire-active-low); stroke-width: 4; filter: drop-shadow(0 0 3px var(--wire-active-low)); }
+        path.active-high { stroke: var(--wire-active-high); stroke-width: 4; filter: drop-shadow(0 0 3px var(--wire-active-high)); }
+
+        /* 底部知识点 */
+        .footer {
+            height: 180px;
+            background: #fff;
+            border-top: 1px solid #ccc;
+            padding: 15px 30px;
+            overflow-y: auto;
+        }
+        .footer h3 { margin-top: 0; color: var(--primary-color); border-left: 4px solid var(--primary-color); padding-left: 10px; }
+        .compare-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px; }
+        .compare-table th, .compare-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .compare-table th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 左侧控制面板 -->
+    <aside class="sidebar">
+        <h2>⚙️ 控制面板</h2>
+        
+        <div class="control-group">
+            <label>数码管类型 (Polarity)</label>
+            <div class="mode-switch">
+                <div class="mode-option active" id="modeCA" onclick="setMode('CA')">共阳极 (CA)</div>
+                <div class="mode-option" id="modeCC" onclick="setMode('CC')">共阴极 (CC)</div>
+            </div>
+            <div style="font-size:12px; color:#666; margin-top:5px;" id="modeDesc">
+                低电平点亮 (0=ON)
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>显示控制</label>
+            <div class="btn-group">
+                <button id="btnPlay" class="btn-play" onclick="togglePlay()">⏸ 暂停</button>
+                <button id="btnStep" class="btn-step" onclick="stepForward()" disabled>⏭ 单步</button>
+            </div>
+            <div style="margin-top:15px">
+                <label for="speedRange" style="font-size:12px">速度: <span id="speedVal">1000</span>ms</label>
+                <input type="range" id="speedRange" min="200" max="2000" step="100" value="1000" style="width:100%">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>当前状态监测</label>
+            <div class="info-panel">
+                <div class="info-row">
+                    <span>显示字符:</span>
+                    <span id="dispChar" style="font-size:1.5em; color:#fff;">0</span>
+                </div>
+                <div style="height:1px; background:#444; margin:5px 0;"></div>
+                <div class="info-row">
+                    <span>Hex段码:</span>
+                    <span id="dispHex" class="highlight">0xC0</span>
+                </div>
+                <div class="info-row">
+                    <span>P1口(Bin):</span>
+                    <span id="dispBin" class="val-display">11000000</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 右侧演示区 -->
+    <main class="demo-area">
+        <div class="circuit-board">
+            
+            <!-- 8051 MCU -->
+            <div class="mcu">
+                <div style="text-align:center; font-size:12px; margin-top:10px; color:#ccc;">Port 1</div>
+                <div class="port-group">
+                    <!-- 生成引脚 DOM P1.0 - P1.7 -->
+                    <div class="pin" id="pin-0"><span>P1.0</span><div class="pin-led" id="pl-0"></div></div>
+                    <div class="pin" id="pin-1"><span>P1.1</span><div class="pin-led" id="pl-1"></div></div>
+                    <div class="pin" id="pin-2"><span>P1.2</span><div class="pin-led" id="pl-2"></div></div>
+                    <div class="pin" id="pin-3"><span>P1.3</span><div class="pin-led" id="pl-3"></div></div>
+                    <div class="pin" id="pin-4"><span>P1.4</span><div class="pin-led" id="pl-4"></div></div>
+                    <div class="pin" id="pin-5"><span>P1.5</span><div class="pin-led" id="pl-5"></div></div>
+                    <div class="pin" id="pin-6"><span>P1.6</span><div class="pin-led" id="pl-6"></div></div>
+                    <div class="pin" id="pin-7"><span>P1.7</span><div class="pin-led" id="pl-7"></div></div>
+                </div>
+            </div>
+
+            <!-- 连线层 -->
+            <svg class="wires-layer" id="wiresSvg">
+                <!-- 路径将由JS动态生成 -->
+            </svg>
+
+            <!-- 数码管模块 -->
+            <div class="display-module">
+                <div style="color:#888; font-size:12px; margin-bottom:10px;" id="dispLabel">Common Anode</div>
+                
+                <!-- 隐形连接点 strip -->
+                <div class="connector-strip">
+                    <div class="connector-point" id="cp-0"></div> <!-- a -->
+                    <div class="connector-point" id="cp-1"></div> <!-- b -->
+                    <div class="connector-point" id="cp-2"></div> <!-- c -->
+                    <div class="connector-point" id="cp-3"></div> <!-- d -->
+                    <div class="connector-point" id="cp-4"></div> <!-- e -->
+                    <div class="connector-point" id="cp-5"></div> <!-- f -->
+                    <div class="connector-point" id="cp-6"></div> <!-- g -->
+                    <div class="connector-point" id="cp-7"></div> <!-- dp -->
+                </div>
+
+                <div class="seven-segment">
+                    <div class="seg seg-h seg-a" id="seg-a"></div>
+                    <div class="seg seg-v seg-b" id="seg-b"></div>
+                    <div class="seg seg-v seg-c" id="seg-c"></div>
+                    <div class="seg seg-h seg-d" id="seg-d"></div>
+                    <div class="seg seg-v seg-e" id="seg-e"></div>
+                    <div class="seg seg-v seg-f" id="seg-f"></div>
+                    <div class="seg seg-h seg-g" id="seg-g"></div>
+                    <div class="seg seg-dp seg-dp" id="seg-dp"></div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<!-- 底部知识点 -->
+<footer class="footer">
+    <h3>📚 知识点对比：共阳极 (CA) vs 共阴极 (CC)</h3>
+    <table class="compare-table">
+        <thead>
+            <tr>
+                <th width="15%">特性</th>
+                <th width="42%">共阳极 (Common Anode)</th>
+                <th width="42%">共阴极 (Common Cathode)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>内部结构</strong></td>
+                <td>所有发光二极管的<strong>阳极(+)</strong>连接在一起接VCC。</td>
+                <td>所有发光二极管的<strong>阴极(-)</strong>连接在一起接GND。</td>
+            </tr>
+            <tr>
+                <td><strong>驱动电平</strong></td>
+                <td><strong>低电平 (0)</strong> 点亮，高电平 (1) 熄灭。</td>
+                <td><strong>高电平 (1)</strong> 点亮，低电平 (0) 熄灭。</td>
+            </tr>
+            <tr>
+                <td><strong>代码示例</strong></td>
+                <td>数字 '0' 代码 = <code>0xC0</code> (1100 0000)</td>
+                <td>数字 '0' 代码 = <code>0x3F</code> (0011 1111)</td>
+            </tr>
+            <tr>
+                <td><strong>51单片机</strong></td>
+                <td><strong>推荐使用</strong>。51单片机灌电流(吸入电流)能力强，适合直接驱动。</td>
+                <td>通常需要加三极管或驱动芯片，因为51拉电流(输出电流)能力弱。</td>
+            </tr>
+        </tbody>
+    </table>
+</footer>
+
+<script>
+    // --- 配置与数据 ---
+    // 共阳极段码表 (基准)
+    const SEG_CODES_CA = [
+        0xC0, 0xF9, 0xA4, 0xB0, 0x99, 0x92, 0x82, 0xF8, 
+        0x80, 0x90, 0x88, 0x83, 0xC6, 0xA1, 0x86, 0x8E
+    ];
+    
+    const CHARS = ['0','1','2','3','4','5','6','7','8','9','A','b','C','d','E','F'];
+    const SEG_NAMES = ['a','b','c','d','e','f','g','dp'];
+
+    // 系统状态
+    let mode = 'CA'; // 'CA' or 'CC'
+    let currentIndex = 0;
+    let isPlaying = true;
+    let intervalId = null;
+    let speed = 1000;
+
+    // --- DOM 元素 ---
+    const dispChar = document.getElementById('dispChar');
+    const dispHex = document.getElementById('dispHex');
+    const dispBin = document.getElementById('dispBin');
+    const btnPlay = document.getElementById('btnPlay');
+    const btnStep = document.getElementById('btnStep');
+
+    // --- 初始化 ---
+    function init() {
+        drawBezierWires();
+        updateDisplay();
+        startTimer();
+        window.addEventListener('resize', drawBezierWires);
+    }
+
+    // 模式切换逻辑
+    window.setMode = function(newMode) {
+        mode = newMode;
+        
+        // 更新按钮样式
+        document.getElementById('modeCA').classList.toggle('active', mode === 'CA');
+        document.getElementById('modeCC').classList.toggle('active', mode === 'CC');
+        
+        // 更新描述
+        const desc = document.getElementById('modeDesc');
+        const label = document.getElementById('dispLabel');
+        if(mode === 'CA') {
+            desc.innerText = "低电平点亮 (0=ON)";
+            label.innerText = "Common Anode (共阳)";
+        } else {
+            desc.innerText = "高电平点亮 (1=ON)";
+            label.innerText = "Common Cathode (共阴)";
+        }
+
+        updateDisplay();
+    };
+
+    // 绘制贝塞尔曲线连线 (排线效果)
+    function drawBezierWires() {
+        const svg = document.getElementById('wiresSvg');
+        svg.innerHTML = ''; // 清空
+        const svgRect = svg.getBoundingClientRect();
+
+        for(let i=0; i<8; i++) {
+            const pin = document.getElementById(`pin-${i}`);
+            const cp = document.getElementById(`cp-${i}`); // 连接点
+
+            if(pin && cp) {
+                const pRect = pin.getBoundingClientRect();
+                const cRect = cp.getBoundingClientRect();
+
+                // 起点 (MCU引脚右侧)
+                const x1 = pRect.right - svgRect.left;
+                const y1 = pRect.top + pRect.height/2 - svgRect.top;
+                
+                // 终点 (数码管连接点)
+                const x2 = cRect.left - svgRect.left;
+                const y2 = cRect.top + cRect.height/2 - svgRect.top;
+
+                // 控制点计算 (使得线条像S形排线)
+                // 两个控制点的X坐标设为中点附近，保持水平切线
+                const cpX1 = x1 + (x2 - x1) * 0.5;
+                const cpX2 = x2 - (x2 - x1) * 0.5;
+
+                // 构建路径数据 M=MoveTo, C=CubicBezier
+                const d = `M ${x1} ${y1} C ${cpX1} ${y1}, ${cpX2} ${y2}, ${x2} ${y2}`;
+
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('d', d);
+                path.setAttribute('id', `wire-${i}`);
+                svg.appendChild(path);
+            }
+        }
+    }
+
+    // 更新显示状态 (核心逻辑)
+    function updateDisplay() {
+        // 获取基准共阳码
+        let code = SEG_CODES_CA[currentIndex];
+        const char = CHARS[currentIndex];
+
+        // 如果是共阴模式，取反
+        if (mode === 'CC') {
+            code = (~code) & 0xFF; // 按位取反并保持8位
+        }
+
+        // 1. 更新文字显示
+        dispChar.innerText = char;
+        dispHex.innerText = '0x' + code.toString(16).toUpperCase();
+        dispBin.innerText = code.toString(2).padStart(8, '0');
+
+        // 2. 遍历8个位更新状态
+        for(let i=0; i<8; i++) {
+            const bit = (code >> i) & 1; // P1.i 的电平值 (0或1)
+
+            const pinLed = document.getElementById(`pl-${i}`);
+            const wire = document.getElementById(`wire-${i}`);
+            const seg = document.getElementById(`seg-${SEG_NAMES[i]}`);
+
+            // 设置MCU引脚LED状态
+            if (bit === 1) {
+                pinLed.className = 'pin-led high'; // 红
+            } else {
+                pinLed.className = 'pin-led low'; // 绿
+            }
+
+            // 判断段是否应该亮
+            // CA: bit=0 -> 亮
+            // CC: bit=1 -> 亮
+            let isSegmentOn = false;
+            if (mode === 'CA' && bit === 0) isSegmentOn = true;
+            if (mode === 'CC' && bit === 1) isSegmentOn = true;
+
+            // 更新连线和段的样式
+            if (wire) {
+                wire.classList.remove('active-low', 'active-high');
+                if (isSegmentOn) {
+                    // 导通了，根据电流方向/逻辑显示颜色
+                    // CA: 低电平导通 (绿)
+                    // CC: 高电平导通 (红)
+                    if(mode === 'CA') wire.classList.add('active-low');
+                    else wire.classList.add('active-high');
+                }
+            }
+
+            if (isSegmentOn) {
+                seg.classList.add('on');
+            } else {
+                seg.classList.remove('on');
+            }
+        }
+    }
+
+    // 动画控制
+    function stepForward() {
+        currentIndex++;
+        if(currentIndex >= 16) currentIndex = 0;
+        updateDisplay();
+    }
+
+    function startTimer() {
+        if(intervalId) clearInterval(intervalId);
+        intervalId = setInterval(stepForward, speed);
+    }
+
+    window.togglePlay = function() {
+        isPlaying = !isPlaying;
+        if(isPlaying) {
+            btnPlay.innerHTML = "⏸ 暂停";
+            btnPlay.classList.remove('paused');
+            btnStep.disabled = true;
+            startTimer();
+        } else {
+            btnPlay.innerHTML = "▶ 继续";
+            btnPlay.classList.add('paused');
+            btnStep.disabled = false;
+            clearInterval(intervalId);
+        }
+    }
+
+    document.getElementById('speedRange').addEventListener('input', (e) => {
+        speed = parseInt(e.target.value);
+        document.getElementById('speedVal').innerText = speed;
+        if(isPlaying) startTimer();
+    });
+
+    // 延时启动等待布局
+    setTimeout(init, 100);
+
+</script>
+
+</body>
+</html>

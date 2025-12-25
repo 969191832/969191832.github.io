@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>51单片机矩阵键盘扫描演示 (带单步)</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --success-color: #2ecc71;
+            --warning-color: #e67e22;
+            --danger-color: #e74c3c;
+            --bg-color: #f4f7f6;
+            --panel-bg: #ffffff;
+            --text-color: #333;
+            --high-level: #e74c3c; /* 红色 1 */
+            --low-level: #2ecc71;  /* 绿色 0 */
+            --active-key: #f1c40f;
+            --border-color: #ddd;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 布局容器 */
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* 左侧控制栏 */
+        .sidebar {
+            width: 320px;
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+            z-index: 10;
+            overflow-y: auto;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            font-size: 0.95em;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        /* 新增：按钮组样式 */
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .ctrl-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .btn-pause {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        .btn-pause:hover { background-color: #2980b9; }
+        
+        .btn-pause.is-paused {
+            background-color: var(--success-color);
+        }
+        .btn-pause.is-paused:hover { background-color: #27ae60; }
+
+        .btn-step {
+            background-color: var(--warning-color);
+            color: white;
+        }
+        .btn-step:hover { background-color: #d35400; }
+        .btn-step:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .status-display {
+            background: #2c3e50;
+            color: #0f0;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 5px;
+            font-size: 13px;
+            line-height: 1.5;
+            min-height: 80px;
+        }
+
+        .legend {
+            margin-top: auto;
+            font-size: 0.85em;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .dot { width: 10px; height: 10px; display: inline-block; border-radius: 50%; margin-right: 5px; }
+        .dot-high { background-color: var(--high-level); }
+        .dot-low { background-color: var(--low-level); }
+
+        /* 右侧演示区 */
+        .demo-area {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background-color: #ecf0f1;
+            padding: 20px;
+        }
+
+        /* 模拟电路布局 */
+        .circuit-board {
+            display: flex;
+            gap: 50px;
+            align-items: center;
+        }
+
+        /* MCU 端口模拟 */
+        .mcu-ports {
+            display: flex;
+            flex-direction: column;
+            background: #34495e;
+            padding: 20px;
+            border-radius: 8px;
+            color: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            min-width: 120px;
+        }
+        .port-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .port-title { font-size: 0.8em; text-align: center; opacity: 0.8; }
+        
+        .pin {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-family: monospace;
+        }
+        .led {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: var(--high-level);
+            transition: background-color 0.1s;
+            border: 1px solid rgba(255,255,255,0.3);
+            box-shadow: inset 0 0 2px rgba(0,0,0,0.5);
+        }
+        .led.low { background-color: var(--low-level); box-shadow: 0 0 8px var(--low-level); }
+
+        /* 矩阵键盘样式 */
+        .keypad-wrapper {
+            position: relative;
+            background: #bdc3c7;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.1), 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .matrix-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 60px);
+            grid-template-rows: repeat(4, 60px);
+            gap: 15px;
+        }
+
+        .key-btn {
+            width: 60px;
+            height: 60px;
+            background: #fdfdfd;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #95a5a6;
+            transition: all 0.1s;
+            user-select: none;
+            position: relative;
+            z-index: 2;
+        }
+
+        .key-btn:active, .key-btn.pressed {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #95a5a6;
+            background-color: var(--active-key);
+        }
+
+        /* 连线动画 (简化为背景网格线) */
+        .lines-layer {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* 简化的连线可视化：在按钮背后 */
+        .row-line {
+            position: absolute;
+            left: -30px; right: -30px;
+            height: 4px;
+            background: #ccc;
+            z-index: 0;
+            transition: background 0.1s;
+            border-radius: 2px;
+        }
+        .col-line {
+            position: absolute;
+            top: -30px; bottom: -30px;
+            width: 4px;
+            background: #ccc;
+            z-index: 0;
+            transition: background 0.1s;
+            border-radius: 2px;
+        }
+
+        /* 激活状态的线 */
+        .row-line.active { background: var(--low-level); box-shadow: 0 0 5px var(--low-level); }
+        .col-line.active { background: var(--low-level); box-shadow: 0 0 5px var(--low-level); }
+
+        /* 底部知识点 */
+        .knowledge-base {
+            height: 220px;
+            background: #fff;
+            border-top: 1px solid var(--border-color);
+            padding: 20px;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+
+        .knowledge-base h3 { margin-top: 0; color: var(--primary-color); font-size: 1.2em; }
+        .knowledge-base ul { padding-left: 20px; margin: 10px 0; }
+        .knowledge-base li { margin-bottom: 6px; line-height: 1.4; font-size: 0.95em; }
+        code { background: #eee; padding: 2px 4px; border-radius: 3px; font-family: monospace; color: #c0392b; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 左侧控制面板 -->
+    <aside class="sidebar">
+        <h2>⚙️ 控制面板</h2>
+        
+        <!-- 新增：动画控制 -->
+        <div class="control-group">
+            <label>动画控制</label>
+            <div class="btn-group">
+                <button id="btnPause" class="ctrl-btn btn-pause" onclick="togglePause()">
+                    ⏸ 暂停
+                </button>
+                <button id="btnStep" class="ctrl-btn btn-step" onclick="manualStep()" disabled>
+                    ⏭ 单步
+                </button>
+            </div>
+            <div style="margin-top:8px; font-size:0.85em; color:#666;">
+                提示: 暂停后可使用单步功能
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label for="speedRange">自动扫描速度</label>
+            <input type="range" id="speedRange" min="50" max="1500" value="800" step="50">
+            <div style="text-align: right; font-size: 0.9em; color: #666;"><span id="speedVal">800</span> ms/行</div>
+        </div>
+
+        <div class="control-group">
+            <label>当前状态:</label>
+            <div id="statusLog" class="status-display">
+                系统初始化完毕<br>
+                准备开始扫描...
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>检测结果:</label>
+            <div style="font-size: 24px; font-weight: bold; text-align: center; padding: 15px; background: #ecf0f1; border-radius: 5px; border:1px solid #ddd;" id="resultDisplay">
+                无按键
+            </div>
+        </div>
+
+        <div class="legend">
+            <p style="margin:0 0 5px 0"><strong>图例说明:</strong></p>
+            <div><span class="dot dot-high"></span> 高电平 (1) - 红</div>
+            <div><span class="dot dot-low"></span> 低电平 (0) - 绿</div>
+            <div style="margin-top:5px; font-size:0.9em; color:#666;">(点击右侧按键可模拟按下)</div>
+        </div>
+    </aside>
+
+    <!-- 右侧演示区域 -->
+    <main class="demo-area">
+        <div class="circuit-board">
+            
+            <!-- 单片机端口显示 -->
+            <div class="mcu-ports">
+                <div style="text-align:center; margin-bottom:10px; font-weight:bold;">P1 端口</div>
+                
+                <div class="port-title">列 (输入)</div>
+                <div class="port-group" id="colPorts">
+                    <div class="pin"><span>P1.7</span><div class="led" id="led-7"></div></div>
+                    <div class="pin"><span>P1.6</span><div class="led" id="led-6"></div></div>
+                    <div class="pin"><span>P1.5</span><div class="led" id="led-5"></div></div>
+                    <div class="pin"><span>P1.4</span><div class="led" id="led-4"></div></div>
+                </div>
+
+                <div style="height:1px; background:rgba(255,255,255,0.2); margin:5px 0;"></div>
+
+                <div class="port-title">行 (输出)</div>
+                <div class="port-group" id="rowPorts">
+                    <div class="pin"><span>P1.3</span><div class="led" id="led-3"></div></div>
+                    <div class="pin"><span>P1.2</span><div class="led" id="led-2"></div></div>
+                    <div class="pin"><span>P1.1</span><div class="led" id="led-1"></div></div>
+                    <div class="pin"><span>P1.0</span><div class="led" id="led-0"></div></div>
+                </div>
+            </div>
+
+            <!-- 键盘矩阵 -->
+            <div class="keypad-wrapper" id="keypadWrapper">
+                <!-- 动态生成的线将放在这里 -->
+                <div class="lines-layer" id="linesLayer"></div>
+
+                <div class="matrix-grid">
+                    <!-- 第一行 -->
+                    <div class="key-btn" data-r="0" data-c="0" onclick="toggleKey(this)">S1</div>
+                    <div class="key-btn" data-r="0" data-c="1" onclick="toggleKey(this)">S2</div>
+                    <div class="key-btn" data-r="0" data-c="2" onclick="toggleKey(this)">S3</div>
+                    <div class="key-btn" data-r="0" data-c="3" onclick="toggleKey(this)">S4</div>
+                    
+                    <!-- 第二行 -->
+                    <div class="key-btn" data-r="1" data-c="0" onclick="toggleKey(this)">S5</div>
+                    <div class="key-btn" data-r="1" data-c="1" onclick="toggleKey(this)">S6</div>
+                    <div class="key-btn" data-r="1" data-c="2" onclick="toggleKey(this)">S7</div>
+                    <div class="key-btn" data-r="1" data-c="3" onclick="toggleKey(this)">S8</div>
+
+                    <!-- 第三行 -->
+                    <div class="key-btn" data-r="2" data-c="0" onclick="toggleKey(this)">S9</div>
+                    <div class="key-btn" data-r="2" data-c="1" onclick="toggleKey(this)">S10</div>
+                    <div class="key-btn" data-r="2" data-c="2" onclick="toggleKey(this)">S11</div>
+                    <div class="key-btn" data-r="2" data-c="3" onclick="toggleKey(this)">S12</div>
+
+                    <!-- 第四行 -->
+                    <div class="key-btn" data-r="3" data-c="0" onclick="toggleKey(this)">S13</div>
+                    <div class="key-btn" data-r="3" data-c="1" onclick="toggleKey(this)">S14</div>
+                    <div class="key-btn" data-r="3" data-c="2" onclick="toggleKey(this)">S15</div>
+                    <div class="key-btn" data-r="3" data-c="3" onclick="toggleKey(this)">S16</div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<!-- 底部知识点 -->
+<section class="knowledge-base">
+    <h3>📚 51单片机矩阵键盘 - 查询扫描法原理</h3>
+    <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+        <div style="flex: 1; min-width: 280px;">
+            <h4>1. 端口配置</h4>
+            <ul>
+                <li><strong>Row (行线)</strong>: P1.0-P1.3，接输出驱动。</li>
+                <li><strong>Col (列线)</strong>: P1.4-P1.7，接输入检测 (通常单片机内部有上拉电阻或外部接上拉)。</li>
+            </ul>
+        </div>
+        <div style="flex: 1; min-width: 280px;">
+            <h4>2. 扫描流程 (逐行扫描)</h4>
+            <ul>
+                <li><strong>Loop</strong>: 依次将 P1.0, P1.1, P1.2, P1.3 拉低 (置0)，其余行为高。</li>
+                <li><strong>Check</strong>: 在每一行拉低时，读取 P1.4-P1.7。</li>
+                <li><strong>Result</strong>: 若读到某位为0，说明该行该列的键被按下（电路导通，行线把列线电平拉低）。</li>
+            </ul>
+        </div>
+        <div style="flex: 1; min-width: 280px;">
+            <h4>3. 键值计算示例</h4>
+            <ul>
+                <li>例如：扫描第2行 (P1=<code>1111 1101</code>)，此时按下 S6 (第2行第2列)。</li>
+                <li>列线 P1.5 被拉低，P1读取值为 <code>1101 1101</code> (0xDD)。</li>
+                <li>程序检测到 P1.5 为 0，结合当前行号，确定是 S6。</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<script>
+    // --- 配置与状态变量 ---
+    let scanSpeed = 800;
+    let currentRow = 0; // 当前扫描行 0-3
+    let intervalId = null;
+    let pressedButton = null; // 当前按下的物理按键 {r, c, el}
+    let isPaused = false; // 暂停状态标志
+
+    // --- DOM 元素 ---
+    const speedInput = document.getElementById('speedRange');
+    const speedVal = document.getElementById('speedVal');
+    const statusLog = document.getElementById('statusLog');
+    const resultDisplay = document.getElementById('resultDisplay');
+    const linesLayer = document.getElementById('linesLayer');
+    const btnPause = document.getElementById('btnPause');
+    const btnStep = document.getElementById('btnStep');
+
+    // --- 初始化 ---
+    function init() {
+        initVisuals(); // 绘制线路
+        startAutoScan(); // 默认开始自动扫描
+    }
+
+    // 绘制背景网格线
+    function initVisuals() {
+        // 行线 (P1.0-P1.3)
+        for(let r=0; r<4; r++) {
+            let line = document.createElement('div');
+            line.className = 'row-line';
+            line.id = `row-line-${r}`;
+            // 估算位置: padding(20) + buttonCenter(30) + index*(button(60)+gap(15))
+            line.style.top = (50 + r * 75) + 'px'; 
+            linesLayer.appendChild(line);
+        }
+        // 列线 (P1.4-P1.7)
+        for(let c=0; c<4; c++) {
+            let line = document.createElement('div');
+            line.className = 'col-line';
+            line.id = `col-line-${c}`;
+            line.style.left = (50 + c * 75) + 'px';
+            linesLayer.appendChild(line);
+        }
+    }
+
+    // --- 用户交互 ---
+
+    // 切换按键状态 (自锁模式，模拟按住不放)
+    window.toggleKey = function(el) {
+        const r = parseInt(el.getAttribute('data-r'));
+        const c = parseInt(el.getAttribute('data-c'));
+
+        if (pressedButton && pressedButton.r === r && pressedButton.c === c) {
+            // 松开当前键
+            pressedButton = null;
+            el.classList.remove('pressed');
+        } else {
+            // 先松开之前的
+            if(pressedButton) pressedButton.el.classList.remove('pressed');
+            // 按下新的
+            pressedButton = {r, c, el};
+            el.classList.add('pressed');
+        }
+        // 如果处于暂停状态，手动更新一下显示（可选，但为了演示逻辑，不立即刷新扫描结果，等待下一次ScanStep）
+    };
+
+    // 切换 暂停/继续
+    window.togglePause = function() {
+        isPaused = !isPaused;
+        if (isPaused) {
+            // 进入暂停
+            clearInterval(intervalId);
+            intervalId = null;
+            btnPause.innerHTML = "▶ 继续";
+            btnPause.classList.add('is-paused');
+            btnStep.disabled = false; // 启用单步
+            statusLog.innerHTML += `<br><span style="color:#f39c12">-- 已暂停 --</span>`;
+        } else {
+            // 继续运行
+            startAutoScan();
+            btnPause.innerHTML = "⏸ 暂停";
+            btnPause.classList.remove('is-paused');
+            btnStep.disabled = true; // 禁用单步
+        }
+    }
+
+    // 单步执行
+    window.manualStep = function() {
+        if (!isPaused) return;
+        scanStep();
+    }
+
+    // 速度条拖动
+    speedInput.addEventListener('input', (e) => {
+        scanSpeed = parseInt(e.target.value);
+        speedVal.innerText = scanSpeed;
+        // 只有在非暂停状态下才重置定时器
+        if (!isPaused) {
+            startAutoScan();
+        }
+    });
+
+    function startAutoScan() {
+        if (intervalId) clearInterval(intervalId);
+        intervalId = setInterval(scanStep, scanSpeed);
+    }
+
+    // --- 核心扫描逻辑 ---
+    function scanStep() {
+        // 1. 清除上一行的视觉效果
+        document.querySelectorAll('.row-line').forEach(l => l.classList.remove('active'));
+        document.querySelectorAll('.col-line').forEach(l => l.classList.remove('active'));
+
+        // 2. 计算P1口输出值：拉低当前行
+        // 高4位(Input)设为1，低4位(Output)当前行设为0
+        let p1_value = 0xFF; 
+        p1_value &= ~(1 << currentRow); // Bitwise clear bit at currentRow
+
+        // 视觉：点亮当前行线
+        document.getElementById(`row-line-${currentRow}`).classList.add('active');
+
+        // 3. 模拟电路导通检测
+        let detected = false;
+        let detectedCol = -1;
+
+        // 检查物理按键是否在当前行
+        if (pressedButton && pressedButton.r === currentRow) {
+            detected = true;
+            detectedCol = pressedButton.c;
+            // 电路短路：将对应的列位拉低
+            // Col 0对应P1.4 (bit 4), Col 1对应P1.5 (bit 5)...
+            p1_value &= ~(1 << (detectedCol + 4)); 
+
+            // 视觉：点亮列线
+            document.getElementById(`col-line-${detectedCol}`).classList.add('active');
+        }
+
+        // 4. 更新 UI 显示
+        updateLEDs(p1_value);
+        updateStatusLog(p1_value, detected, detectedCol);
+
+        // 5. 准备下一次循环
+        currentRow++;
+        if (currentRow > 3) currentRow = 0;
+    }
+
+    // 更新LED灯状态
+    function updateLEDs(val) {
+        for(let i=0; i<8; i++) {
+            const isHigh = (val >> i) & 1;
+            const led = document.getElementById(`led-${i}`);
+            if (isHigh) {
+                led.classList.remove('low');
+            } else {
+                led.classList.add('low');
+            }
+        }
+    }
+
+    // 更新文字日志
+    function updateStatusLog(p1Val, detected, colIndex) {
+        let binStr = p1Val.toString(2).padStart(8, '0');
+        // 格式化二进制字符串，加空格方便看： 1110 1111
+        binStr = binStr.substring(0,4) + " " + binStr.substring(4);
+        
+        let html = `扫描中: ROW ${currentRow} (P1.${currentRow}=0)<br>`;
+        html += `寄存器: ${binStr}<br>`;
+        
+        if (detected) {
+            html += `<span style="color:#2ecc71"><strong>✅ 检测到低电平!</strong></span>`;
+            resultDisplay.innerText = `S${currentRow * 4 + colIndex + 1}`;
+            resultDisplay.style.color = "#e74c3c";
+            resultDisplay.style.borderColor = "#e74c3c";
+        } else {
+            html += `状态: 无回路导通`;
+            // 如果按下了键但没扫到这一行，显示扫描中；如果没按键，显示无
+            if (!pressedButton) {
+                resultDisplay.innerText = "无按键";
+                resultDisplay.style.color = "#7f8c8d";
+                resultDisplay.style.borderColor = "#ddd";
+            } else if (pressedButton.r !== currentRow) {
+                 // 此时正在扫其他行，保持上一次的结果或显示扫描中，这里选择不清除结果，
+                 // 只是让它看起来像是在等待扫描到正确的那一行
+            }
+        }
+        statusLog.innerHTML = html;
+    }
+
+    // 启动程序
+    init();
+
+</script>
+</body>
+</html>

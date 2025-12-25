@@ -1,0 +1,294 @@
+<!-- START OF FILE 51_PWM_Sim.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>51单片机 PWM 原理与应用演示</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-bg: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #00e676; /* PWM High Green */
+            --off-color: #333;
+            --grid-color: #333;
+        }
+
+        body {
+            font-family: 'Segoe UI', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .container { display: flex; flex: 1; overflow: hidden; }
+
+        /* 左侧控制 */
+        .sidebar {
+            width: 300px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h2 { color: var(--accent-color); margin: 0; }
+        .control-group { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; }
+        label { display: block; margin-bottom: 10px; font-weight: bold; }
+        
+        input[type=range] { width: 100%; cursor: pointer; }
+        
+        .value-display { font-size: 1.2rem; color: var(--accent-color); float: right; font-family: monospace; }
+
+        /* 右侧显示 */
+        .main-display {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            background: #000;
+        }
+
+        .visual-row {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            height: 200px;
+            border-bottom: 1px solid #333;
+        }
+
+        /* LED 模拟 */
+        .led-box { text-align: center; }
+        .led {
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            background-color: #222;
+            border: 2px solid #555;
+            box-shadow: 0 0 0 #000;
+            margin: 0 auto 10px;
+            transition: background-color 0.05s, box-shadow 0.05s;
+        }
+
+        /* 电机模拟 */
+        .motor-box { text-align: center; }
+        .motor {
+            width: 80px; height: 80px;
+            border-radius: 50%;
+            border: 4px solid #555;
+            position: relative;
+            background: #222;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .rotor {
+            width: 70%; height: 10px; background: #fff;
+            border-radius: 5px;
+        }
+
+        /* 示波器 */
+        .scope-container { flex: 1; position: relative; margin-top: 20px; background: #080808; border: 1px solid #333; border-radius: 4px;}
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* 底部 */
+        .footer {
+            height: 150px;
+            background: var(--panel-bg);
+            padding: 20px;
+            border-top: 1px solid #333;
+            overflow-y: auto;
+            font-size: 0.9rem;
+        }
+        .footer h4 { color: var(--accent-color); margin: 0 0 5px 0; }
+        code { background: #333; padding: 2px 5px; color: #ff9800; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="sidebar">
+        <h2>PWM 模拟器</h2>
+        <div style="font-size:0.8rem; color:#aaa;">Pulse Width Modulation</div>
+
+        <div class="control-group">
+            <label>占空比 (Duty Cycle) <span id="duty-val" class="value-display">50%</span></label>
+            <input type="range" id="duty-slider" min="0" max="100" value="50">
+            <div style="margin-top:5px; font-size:0.8rem; color:#888;">
+                高电平时间 / 周期
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>频率 (Frequency) <span id="freq-val" class="value-display">Low</span></label>
+            <input type="range" id="freq-slider" min="1" max="20" value="5">
+            <div style="margin-top:5px; font-size:0.8rem; color:#888;">
+                模拟定时器中断速度
+            </div>
+        </div>
+
+        <div style="margin-top:auto; font-size:0.9rem; color:#aaa;">
+            <div>平均电压: <span id="avg-volt" style="color:#fff">2.50 V</span> (VCC=5V)</div>
+        </div>
+    </div>
+
+    <div class="main-display">
+        <!-- 实物模拟区 -->
+        <div class="visual-row">
+            <div class="led-box">
+                <div class="led" id="sim-led"></div>
+                <div>LED 亮度</div>
+            </div>
+            <div class="motor-box">
+                <div class="motor">
+                    <div class="rotor" id="sim-rotor"></div>
+                </div>
+                <div>直流电机速度</div>
+            </div>
+        </div>
+
+        <!-- 示波器区 -->
+        <div class="scope-container">
+            <div style="position:absolute; top:5px; left:5px; color:#666; font-size:12px;">P1.0 Output Waveform</div>
+            <canvas id="scopeCanvas"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="footer">
+    <h4>知识点：51单片机产生 PWM</h4>
+    <p>标准 8051 没有硬件 PWM 模块，通常使用<strong>定时器中断</strong>来模拟：<br>
+    1. 设定一个固定的定时器周期（如 100us）。<br>
+    2. 定义一个计数器变量 <code>cnt</code> (0-100)。<br>
+    3. 在中断中 <code>cnt++</code>。当 <code>cnt < duty</code> 时输出高电平，否则输出低电平。<br>
+    4. 当 <code>cnt >= 100</code> 时归零。这样就产生了一个周期性的 PWM 波。</p>
+</div>
+
+<script>
+    const canvas = document.getElementById('scopeCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // State
+    let duty = 50; // 0-100
+    let speed = 5; // Sim speed
+    let counter = 0; // 0-100 loop
+    let signal = 0; // Current signal level (0 or 1)
+    
+    // Physics simulation
+    let motorAngle = 0;
+    let motorSpeed = 0;
+    
+    // History for scope
+    let waveform = [];
+    const maxSamples = 500;
+
+    // UI Refs
+    const dutySlider = document.getElementById('duty-slider');
+    const freqSlider = document.getElementById('freq-slider');
+    const dutyVal = document.getElementById('duty-val');
+    const freqVal = document.getElementById('freq-val');
+    const avgVolt = document.getElementById('avg-volt');
+    const led = document.getElementById('sim-led');
+    const rotor = document.getElementById('sim-rotor');
+
+    // Events
+    dutySlider.addEventListener('input', (e) => {
+        duty = parseInt(e.target.value);
+        dutyVal.innerText = duty + "%";
+        avgVolt.innerText = (5 * duty / 100).toFixed(2) + " V";
+    });
+    
+    freqSlider.addEventListener('input', (e) => {
+        speed = parseInt(e.target.value);
+        freqVal.innerText = speed > 15 ? "High" : (speed > 8 ? "Med" : "Low");
+    });
+
+    function resize() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Main Loop
+    function loop() {
+        // 1. Simulate Timer Logic
+        // We advance the counter by 'speed' every frame to simulate frequency
+        counter += speed;
+        if (counter >= 100) counter = counter % 100;
+
+        // 2. Determine Output Level
+        signal = (counter < duty) ? 1 : 0;
+
+        // 3. Update Visuals
+        
+        // LED Physics: Immediate response (simplified)
+        // High duty = high opacity/brightness
+        // If freq is low, we see flickering. If high, we see average brightness.
+        // To simulate persistence of vision, we use a simple smoothing or just raw signal if slow
+        let opacity = signal;
+        if (speed > 10) opacity = duty / 100; // Persistence of vision at high speed
+        else opacity = signal; // Flicker at low speed
+        
+        led.style.backgroundColor = `rgba(0, 230, 118, ${0.1 + opacity * 0.9})`;
+        led.style.boxShadow = `0 0 ${opacity * 20}px #00e676`;
+
+        // Motor Physics: Inertia
+        let targetSpeed = (duty / 100) * 0.5; // Max speed 0.5 rad/frame
+        // Simple Low Pass Filter for inertia
+        motorSpeed = motorSpeed * 0.95 + targetSpeed * 0.05;
+        motorAngle += motorSpeed;
+        rotor.style.transform = `rotate(${motorAngle}rad)`;
+
+        // 4. Update Scope
+        waveform.push(signal);
+        if (waveform.length > canvas.width) waveform.shift();
+
+        drawScope();
+        requestAnimationFrame(loop);
+    }
+
+    function drawScope() {
+        ctx.fillStyle = "#080808";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Grid
+        ctx.strokeStyle = "#222";
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height/2); ctx.lineTo(canvas.width, canvas.height/2);
+        ctx.stroke();
+
+        // Wave
+        ctx.strokeStyle = "#00e676";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        
+        const h = canvas.height;
+        const yHigh = h * 0.2;
+        const yLow = h * 0.8;
+
+        for (let i = 0; i < waveform.length; i++) {
+            let x = i;
+            let y = waveform[i] ? yHigh : yLow;
+            
+            if (i === 0) ctx.moveTo(x, y);
+            else {
+                // Draw vertical lines for transitions
+                let prevY = waveform[i-1] ? yHigh : yLow;
+                ctx.lineTo(x, prevY);
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.stroke();
+    }
+
+    loop();
+
+</script>
+</body>
+</html>

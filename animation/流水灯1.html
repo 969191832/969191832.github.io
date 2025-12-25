@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>51单片机 P1口流水灯演示</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --dark-bg: #2c3e50;
+            --light-bg: #ecf0f1;
+            --led-off: #500000;
+            --led-on: #ff0000;
+            --wire-color: #7f8c8d;
+            --wire-active: #2ecc71; /* 导通时的颜色 */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #fdfdfd;
+            color: #333;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 主布局 */
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* 左侧控制栏 */
+        .sidebar {
+            width: 320px;
+            background-color: #fff;
+            border-right: 1px solid #ddd;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+            z-index: 10;
+        }
+
+        .sidebar h2 { color: var(--dark-bg); border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; }
+
+        .control-group { margin-bottom: 25px; }
+        
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
+
+        /* 按钮组 */
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .btn-play { background-color: var(--primary-color); color: white; }
+        .btn-play:hover { background-color: #2980b9; }
+        .btn-play.paused { background-color: var(--success-color); } /* 绿色表示继续 */
+
+        .btn-step { background-color: var(--warning-color); color: white; }
+        .btn-step:hover { background-color: #d35400; }
+        .btn-step:disabled { background-color: #bdc3c7; cursor: not-allowed; opacity: 0.7; }
+
+        input[type="range"] { width: 100%; margin-top: 5px; }
+
+        /* 状态显示屏 */
+        .lcd-screen {
+            background: #222;
+            color: #0f0;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 15px;
+            border-radius: 5px;
+            border: 2px solid #555;
+            box-shadow: inset 0 0 10px #000;
+        }
+        .lcd-row { margin-bottom: 5px; display: flex; justify-content: space-between; }
+        .bit-val { color: #ff0; font-weight: bold; }
+
+        /* 右侧演示区 */
+        .demo-area {
+            flex: 1;
+            background-color: var(--light-bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: auto;
+        }
+
+        /* 电路板容器 */
+        .board {
+            display: flex;
+            gap: 60px;
+            align-items: center;
+            padding: 40px;
+            background: #e0e5e9;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            border: 1px solid #ccc;
+        }
+
+        /* 单片机芯片 */
+        .mcu-chip {
+            width: 140px;
+            height: 360px;
+            background: #333;
+            border-radius: 4px;
+            position: relative;
+            color: #aaa;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            box-shadow: 4px 4px 10px rgba(0,0,0,0.3);
+        }
+        .mcu-chip::before {
+            content: "8051";
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%) rotate(-90deg);
+            font-size: 30px;
+            font-weight: bold;
+            color: rgba(255,255,255,0.1);
+        }
+        .mcu-chip::after {
+            content: "";
+            position: absolute;
+            top: 10px; left: 50%; transform: translateX(-50%);
+            width: 20px; height: 20px;
+            background: #222;
+            border-radius: 50%;
+        }
+
+        /* 端口引脚 */
+        .port-label {
+            position: absolute;
+            right: 10px; top: -25px;
+            font-weight: bold; color: #333;
+        }
+        
+        .pins-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            height: 100%;
+            padding: 20px 0;
+        }
+
+        .pin {
+            height: 16px;
+            background: #bbb;
+            width: 15px; /* 伸出芯片一点 */
+            align-self: flex-end; /* 靠右 */
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .pin span {
+            position: absolute;
+            right: 20px;
+            color: #fff;
+            font-size: 12px;
+            font-family: monospace;
+            white-space: nowrap;
+        }
+        /* 引脚电平指示点 */
+        .pin-state {
+            width: 8px; height: 8px; border-radius: 50%;
+            margin-left: 2px;
+            background: #555; 
+        }
+        .pin-state.low { background: var(--success-color); box-shadow: 0 0 5px var(--success-color); } /* 低电平亮 */
+        .pin-state.high { background: var(--danger-color); } /* 高电平红 */
+
+        /* LED 模块 */
+        .led-module {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            height: 320px; /* 与芯片引脚对齐 */
+            background: #2c3e50;
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 2px solid #34495e;
+            position: relative;
+        }
+        
+        .led-title {
+            position: absolute;
+            top: -25px; left: 50%; transform: translateX(-50%);
+            font-weight: bold; color: #333; white-space: nowrap;
+        }
+
+        .led-unit {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            height: 16px; /* 与pin高度一致 */
+        }
+
+        .led-bulb {
+            width: 24px;
+            height: 24px;
+            background-color: var(--led-off);
+            border-radius: 50%;
+            border: 2px solid rgba(0,0,0,0.3);
+            box-shadow: inset 2px 2px 5px rgba(0,0,0,0.5);
+            transition: background-color 0.1s, box-shadow 0.1s;
+        }
+        
+        /* LED 点亮状态 */
+        .led-bulb.on {
+            background-color: var(--led-on);
+            box-shadow: 0 0 15px var(--led-on), inset -2px -2px 5px rgba(0,0,0,0.2);
+            border-color: #ffcccc;
+        }
+
+        .resistor {
+            width: 30px; height: 10px;
+            background: repeating-linear-gradient(90deg, #d3b083, #d3b083 5px, #a52a2a 5px, #a52a2a 7px);
+            border-radius: 2px;
+            border: 1px solid #666;
+        }
+
+        /* 连线 SVG */
+        .wires-svg {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+        line {
+            stroke: var(--wire-color);
+            stroke-width: 3;
+            transition: stroke 0.1s;
+        }
+        line.active {
+            stroke: var(--wire-active); /* 低电平时导通 */
+        }
+
+        /* 底部知识点 */
+        .footer {
+            height: 220px;
+            background: #fff;
+            border-top: 1px solid #ddd;
+            padding: 20px 40px;
+            overflow-y: auto;
+        }
+        .footer h3 { color: var(--primary-color); margin-top: 0; }
+        .code-block {
+            background: #f4f4f4;
+            padding: 10px;
+            border-left: 4px solid var(--primary-color);
+            font-family: monospace;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+        .theory-grid { display: flex; gap: 30px; }
+        .theory-item { flex: 1; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <h2>⚙️ 控制面板</h2>
+
+        <div class="control-group">
+            <label>动画控制</label>
+            <div class="btn-group">
+                <button id="btnPlay" class="btn-play" onclick="togglePlay()">⏸ 暂停</button>
+                <button id="btnStep" class="btn-step" onclick="manualStep()" disabled>⏭ 单步</button>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label for="speedRange">流水灯速度</label>
+            <input type="range" id="speedRange" min="50" max="1000" value="500" step="50">
+            <div style="display:flex; justify-content:space-between; font-size:12px; color:#666; margin-top:5px;">
+                <span>快 (50ms)</span>
+                <span id="speedDisplay">500 ms</span>
+                <span>慢 (1000ms)</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label>MCU 寄存器状态 (P1)</label>
+            <div class="lcd-screen">
+                <div class="lcd-row">
+                    <span>BIN:</span>
+                    <span id="binVal" class="bit-val">11111110</span>
+                </div>
+                <div class="lcd-row">
+                    <span>HEX:</span>
+                    <span id="hexVal" class="bit-val">0xFE</span>
+                </div>
+                <div style="height:1px; background:#444; margin:5px 0;"></div>
+                <div class="lcd-row" style="font-size:12px; color:#ccc;">
+                    <span>当前点亮:</span>
+                    <span id="currentLedText">P1.0 (D1)</span>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top:auto; font-size:13px; color:#7f8c8d; background:#f9f9f9; padding:10px; border-radius:5px;">
+            <strong>💡 提示：</strong><br>
+            51单片机 P1口通常连接LED阴极。<br>
+            输出 <strong>0 (低电平)</strong> -> LED 亮<br>
+            输出 <strong>1 (高电平)</strong> -> LED 灭
+        </div>
+    </aside>
+
+    <!-- 演示区 -->
+    <main class="demo-area" id="demoArea">
+        <div class="board">
+            
+            <!-- 8051 MCU -->
+            <div class="mcu-chip">
+                <div class="port-label">P1 PORT</div>
+                <div class="pins-container">
+                    <!-- 自动生成 P1.0 - P1.7 -->
+                    <!-- 这里的ID是为了JS定位连线 -->
+                    <div class="pin" id="pin-0"><span>P1.0</span><div class="pin-state" id="ps-0"></div></div>
+                    <div class="pin" id="pin-1"><span>P1.1</span><div class="pin-state" id="ps-1"></div></div>
+                    <div class="pin" id="pin-2"><span>P1.2</span><div class="pin-state" id="ps-2"></div></div>
+                    <div class="pin" id="pin-3"><span>P1.3</span><div class="pin-state" id="ps-3"></div></div>
+                    <div class="pin" id="pin-4"><span>P1.4</span><div class="pin-state" id="ps-4"></div></div>
+                    <div class="pin" id="pin-5"><span>P1.5</span><div class="pin-state" id="ps-5"></div></div>
+                    <div class="pin" id="pin-6"><span>P1.6</span><div class="pin-state" id="ps-6"></div></div>
+                    <div class="pin" id="pin-7"><span>P1.7</span><div class="pin-state" id="ps-7"></div></div>
+                </div>
+            </div>
+
+            <!-- 连线 SVG 层 -->
+            <svg class="wires-svg" id="wiresSvg">
+                <!-- 线条由 JS 动态绘制 -->
+            </svg>
+
+            <!-- LED 模块 -->
+            <div class="led-module">
+                <div class="led-title">8路 LED 模块 (共阳极)</div>
+                <!-- 8个 LED -->
+                <div class="led-unit" id="unit-0"><div class="resistor"></div><div class="led-bulb" id="led-0"></div></div>
+                <div class="led-unit" id="unit-1"><div class="resistor"></div><div class="led-bulb" id="led-1"></div></div>
+                <div class="led-unit" id="unit-2"><div class="resistor"></div><div class="led-bulb" id="led-2"></div></div>
+                <div class="led-unit" id="unit-3"><div class="resistor"></div><div class="led-bulb" id="led-3"></div></div>
+                <div class="led-unit" id="unit-4"><div class="resistor"></div><div class="led-bulb" id="led-4"></div></div>
+                <div class="led-unit" id="unit-5"><div class="resistor"></div><div class="led-bulb" id="led-5"></div></div>
+                <div class="led-unit" id="unit-6"><div class="resistor"></div><div class="led-bulb" id="led-6"></div></div>
+                <div class="led-unit" id="unit-7"><div class="resistor"></div><div class="led-bulb" id="led-7"></div></div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<!-- 底部知识点 -->
+<footer class="footer">
+    <h3>📚 知识点详解：循环流水灯</h3>
+    <div class="theory-grid">
+        <div class="theory-item">
+            <h4>1. 硬件连接 (灌电流驱动)</h4>
+            <p>51单片机IO口拉电流能力弱，灌电流能力强。因此通常采用<strong>低电平驱动</strong>：</p>
+            <ul>
+                <li>LED阳极接 VCC (电源)。</li>
+                <li>LED阴极串联限流电阻接 P1口。</li>
+                <li><strong>P1输出 0</strong> -> 电位差形成 -> 电流流过 -> <strong>灯亮</strong>。</li>
+                <li><strong>P1输出 1</strong> -> 无电位差 -> <strong>灯灭</strong>。</li>
+            </ul>
+        </div>
+        <div class="theory-item">
+            <h4>2. 核心逻辑 (位移)</h4>
+            <p>要实现流水灯，就是让 0 的位置不断移动。以C语言为例：</p>
+            <div class="code-block">
+#include &lt;intrins.h&gt; // 包含 _crol_ 函数
+void main() {
+    unsigned char temp = 0xFE; // 1111 1110 (P1.0亮)
+    while(1) {
+        P1 = temp;
+        Delay(500);
+        // 循环左移 1 位
+        temp = _crol_(temp, 1); 
+        // 结果变化: 11111110 -> 11111101 -> 11111011 ...
+    }
+}
+            </div>
+        </div>
+        <div class="theory-item">
+            <h4>3. 演示说明</h4>
+            <p>左侧控制面板可以调节延时函数的长度（速度）。点击“暂停”后，使用“单步”按钮可以清晰地观察每一次位移操作后寄存器值的变化。</p>
+        </div>
+    </div>
+</footer>
+
+<script>
+    // 配置与状态
+    let delayMs = 500;
+    let currentBit = 0; // 0-7，代表当前点亮的是哪一位
+    let isRunning = true;
+    let timerId = null;
+
+    // DOM 元素
+    const speedInput = document.getElementById('speedRange');
+    const speedDisplay = document.getElementById('speedDisplay');
+    const btnPlay = document.getElementById('btnPlay');
+    const btnStep = document.getElementById('btnStep');
+    const binValDisplay = document.getElementById('binVal');
+    const hexValDisplay = document.getElementById('hexVal');
+    const currentLedText = document.getElementById('currentLedText');
+    const wiresSvg = document.getElementById('wiresSvg');
+
+    // 初始化
+    function init() {
+        drawWires(); // 绘制连线
+        updateState(); // 初始状态
+        startTimer();
+        
+        // 窗口大小改变时重绘连线
+        window.addEventListener('resize', () => {
+            drawWires();
+        });
+    }
+
+    // 绘制连线 (从Pin到LED)
+    function drawWires() {
+        wiresSvg.innerHTML = ''; // 清空
+        const svgRect = wiresSvg.getBoundingClientRect();
+        
+        for(let i=0; i<8; i++) {
+            const pin = document.getElementById(`pin-${i}`);
+            const ledUnit = document.getElementById(`unit-${i}`);
+            
+            if(!pin || !ledUnit) continue;
+
+            const pinRect = pin.getBoundingClientRect();
+            const ledRect = ledUnit.getBoundingClientRect();
+
+            // 计算相对于SVG容器的坐标
+            // 起点：Pin的右边缘中间
+            const x1 = pinRect.right - svgRect.left;
+            const y1 = pinRect.top + pinRect.height/2 - svgRect.top;
+
+            // 终点：LED单元的左边缘中间
+            const x2 = ledRect.left - svgRect.left;
+            const y2 = ledRect.top + ledRect.height/2 - svgRect.top;
+
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', x1);
+            line.setAttribute('y1', y1);
+            line.setAttribute('x2', x2);
+            line.setAttribute('y2', y2);
+            line.setAttribute('id', `wire-${i}`);
+            wiresSvg.appendChild(line);
+        }
+    }
+
+    // 核心逻辑：更新状态
+    function updateState() {
+        // 1. 计算寄存器值
+        // Active Low: 0 是亮。所以 1 << currentBit 得到 00000001，取反得到 11111110
+        // 注意：演示是从上(P1.0)到下(P1.7)，对应二进制通常习惯 P1.7...P1.0
+        // 这里的 currentBit 0 对应 P1.0
+        
+        const val = ~(1 << currentBit) & 0xFF; // 保证是8位
+
+        // 2. 更新 UI 显示
+        updateUI(val, currentBit);
+
+        // 3. 准备下一步 (循环 0->7->0)
+        currentBit++;
+        if(currentBit > 7) currentBit = 0;
+    }
+
+    // 更新UI视图
+    function updateUI(val, activeBitIndex) {
+        // 更新文本显示
+        const binStr = val.toString(2).padStart(8, '0');
+        const hexStr = "0x" + val.toString(16).toUpperCase().padStart(2, '0');
+        
+        binValDisplay.innerText = binStr;
+        hexValDisplay.innerText = hexStr;
+        currentLedText.innerText = `P1.${activeBitIndex} (LED ${activeBitIndex+1})`;
+
+        // 更新 LED, 引脚 和 连线 状态
+        for(let i=0; i<8; i++) {
+            const isLow = !((val >> i) & 1); // 第i位是否为0
+            
+            const led = document.getElementById(`led-${i}`);
+            const pinState = document.getElementById(`ps-${i}`);
+            const wire = document.getElementById(`wire-${i}`);
+
+            if (isLow) {
+                // 低电平 -> 亮
+                led.classList.add('on');
+                pinState.classList.remove('high');
+                pinState.classList.add('low');
+                if(wire) wire.classList.add('active');
+            } else {
+                // 高电平 -> 灭
+                led.classList.remove('on');
+                pinState.classList.remove('low');
+                pinState.classList.add('high');
+                if(wire) wire.classList.remove('active');
+            }
+        }
+    }
+
+    // 播放/暂停切换
+    window.togglePlay = function() {
+        isRunning = !isRunning;
+        if (isRunning) {
+            btnPlay.innerHTML = "⏸ 暂停";
+            btnPlay.classList.remove('paused');
+            btnStep.disabled = true;
+            startTimer();
+        } else {
+            btnPlay.innerHTML = "▶ 继续";
+            btnPlay.classList.add('paused');
+            btnStep.disabled = false;
+            stopTimer();
+        }
+    };
+
+    // 单步执行
+    window.manualStep = function() {
+        if(isRunning) return;
+        updateState();
+    };
+
+    // 速度调节
+    speedInput.addEventListener('input', (e) => {
+        delayMs = parseInt(e.target.value);
+        // 范围反转显示逻辑（只是文本）：实际上数值越大越慢
+        // e.g. value=500ms
+        speedDisplay.innerText = delayMs + " ms";
+        
+        if (isRunning) {
+            stopTimer();
+            startTimer();
+        }
+    });
+
+    function startTimer() {
+        if(timerId) clearInterval(timerId);
+        timerId = setInterval(updateState, delayMs);
+    }
+
+    function stopTimer() {
+        if(timerId) clearInterval(timerId);
+        timerId = null;
+    }
+
+    // 启动
+    // 稍微延迟一下等待布局渲染完毕再画线，确保坐标准确
+    setTimeout(init, 100);
+
+</script>
+
+</body>
+</html>

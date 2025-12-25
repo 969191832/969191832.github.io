@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模拟信号转数字信号 (ADC) 演示</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --panel-bg: #252537;
+            --text-color: #cdd6f4;
+            --accent-color: #89b4fa;
+            --analog-color: #a6e3a1;
+            --digital-color: #f38ba8;
+            --grid-color: #45475a;
+            --binary-bg: #11111b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 布局容器 */
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* 左侧控制栏 */
+        .sidebar {
+            width: 300px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+
+        h2, h3 {
+            margin-top: 0;
+            color: var(--accent-color);
+        }
+
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        input[type=range] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .value-display {
+            float: right;
+            color: var(--accent-color);
+        }
+
+        button {
+            background-color: var(--accent-color);
+            color: var(--bg-color);
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            margin-top: 10px;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        /* 右侧演示区 */
+        .main-display {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: relative;
+        }
+
+        .canvas-container {
+            background-color: #11111b;
+            border-radius: 10px;
+            border: 1px solid var(--grid-color);
+            position: relative;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .overlay-legend {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            pointer-events: none;
+        }
+
+        .legend-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        /* 编码输出区 */
+        .binary-stream {
+            height: 60px;
+            background-color: var(--binary-bg);
+            border: 1px solid var(--accent-color);
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            padding: 0 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
+            white-space: nowrap;
+            position: relative;
+        }
+
+        .bit-packet {
+            display: inline-block;
+            padding: 5px 8px;
+            margin-right: 10px;
+            background: var(--panel-bg);
+            border-radius: 4px;
+            color: var(--digital-color);
+            animation: slideLeft 4s linear infinite; /* 动画由JS控制速度 */
+        }
+
+        /* 底部知识点 */
+        .footer-notes {
+            height: 180px;
+            background-color: var(--panel-bg);
+            padding: 15px 30px;
+            border-top: 1px solid var(--grid-color);
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            overflow-y: auto;
+        }
+
+        .note-card {
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .note-card h4 {
+            margin: 0 0 5px 0;
+            color: var(--accent-color);
+        }
+
+        /* 响应式 */
+        @media (max-width: 900px) {
+            .container { flex-direction: column; overflow-y: auto; }
+            .sidebar { width: auto; height: auto; }
+            .footer-notes { grid-template-columns: 1fr 1fr; height: auto; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 左侧控制面板 -->
+    <aside class="sidebar">
+        <h2>ADC 控制台</h2>
+        
+        <div class="control-group">
+            <label>模拟信号频率 (Hz) <span id="freq-val" class="value-display">1</span></label>
+            <input type="range" id="frequency" min="0.5" max="5" step="0.1" value="1">
+        </div>
+
+        <div class="control-group">
+            <label>采样率 (Fs) <span id="rate-val" class="value-display">10</span></label>
+            <input type="range" id="sampleRate" min="2" max="50" step="1" value="10">
+            <small style="color: #aaa; display:block; margin-top:5px;">奈奎斯特定理: Fs > 2*Signal</small>
+        </div>
+
+        <div class="control-group">
+            <label>量化精度 (Bit Depth) <span id="bit-val" class="value-display">3-bit</span></label>
+            <input type="range" id="bitDepth" min="1" max="5" step="1" value="3">
+            <small style="color: #aaa; display:block; margin-top:5px;">层级数: <span id="levels-count">8</span></small>
+        </div>
+
+        <div class="control-group">
+            <button id="toggle-btn">暂停 / 继续</button>
+            <button id="reset-btn" style="background-color: #f38ba8; color: #1e1e2e;">重置演示</button>
+        </div>
+        
+        <div style="margin-top: auto; font-size: 0.8rem; color: #aaa;">
+            当前状态: <span id="status-text" style="color: var(--accent-color)">运行中</span>
+        </div>
+    </aside>
+
+    <!-- 右侧演示区 -->
+    <main class="main-display">
+        <!-- 图表 1: 模拟与采样 -->
+        <div class="canvas-container">
+            <div class="overlay-legend">
+                <span class="legend-dot" style="background: var(--analog-color);"></span> 原始模拟信号
+                <span class="legend-dot" style="background: var(--digital-color); margin-left: 10px;"></span> 采样保持 (阶梯)
+            </div>
+            <canvas id="signalCanvas"></canvas>
+        </div>
+
+        <!-- 图表 2: 编码流 -->
+        <div>
+            <label>实时编码输出 (PCM流)</label>
+            <div class="binary-stream" id="binary-output">
+                <!-- 动态生成的二进制块 -->
+                <span style="color: #555; margin-left: 10px;">等待采样...</span>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- 底部知识点 -->
+<footer class="footer-notes">
+    <div class="note-card">
+        <h4>1. 采样 (Sampling)</h4>
+        <p>将时间上连续的模拟信号，在离散的时间点上进行抽取。采样率决定了时间轴上的分辨率。如果采样率太低，会发生混叠（失真）。</p>
+    </div>
+    <div class="note-card">
+        <h4>2. 保持 (Holding)</h4>
+        <p>在下一次采样到来之前，电路将电压保持在当前采样值。这产生了你在图中看到的“阶梯”形状（采样保持电路 S/H）。</p>
+    </div>
+    <div class="note-card">
+        <h4>3. 量化 (Quantization)</h4>
+        <p>将连续的电压幅值映射到有限个离散的层级上。位数越高（Bit Depth），层级越多，量化误差（噪音）越小，还原度越高。</p>
+    </div>
+    <div class="note-card">
+        <h4>4. 编码 (Encoding)</h4>
+        <p>将量化后的十进制层级数值转换为二进制代码（0和1）。这是计算机最终能够存储和处理的数字形式。</p>
+    </div>
+</footer>
+
+<script>
+    // 配置与状态
+    const config = {
+        signalFreq: 1,      // 信号频率 Hz
+        sampleRate: 10,     // 采样率 Hz
+        bitDepth: 3,        // 量化位数
+        isRunning: true,
+        time: 0,            // 全局时间
+        speed: 0.01,        // 动画速度模拟时间增量
+        maxHistory: 800     // 保存多少帧数据用于绘图
+    };
+
+    // DOM 元素
+    const canvas = document.getElementById('signalCanvas');
+    const ctx = canvas.getContext('2d');
+    const binaryContainer = document.getElementById('binary-output');
+    
+    const inputs = {
+        freq: document.getElementById('frequency'),
+        rate: document.getElementById('sampleRate'),
+        bit: document.getElementById('bitDepth'),
+        toggle: document.getElementById('toggle-btn'),
+        reset: document.getElementById('reset-btn')
+    };
+    
+    const displays = {
+        freq: document.getElementById('freq-val'),
+        rate: document.getElementById('rate-val'),
+        bit: document.getElementById('bit-val'),
+        levels: document.getElementById('levels-count'),
+        status: document.getElementById('status-text')
+    };
+
+    // 数据缓冲区
+    let analogData = []; // {x, y}
+    let digitalData = []; // {x, y, code}
+    let lastSampleTime = -1;
+
+    // 初始化 Canvas 尺寸
+    function resizeCanvas() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    // 工具函数：映射
+    // 信号范围假设为 -1 到 1
+    function mapY(value) {
+        const margin = 40;
+        const h = canvas.height - 2 * margin;
+        // value (-1 ~ 1) -> canvas y
+        // -1 -> bottom, 1 -> top
+        return canvas.height / 2 - (value * h / 2);
+    }
+
+    function quantize(value, bits) {
+        const levels = Math.pow(2, bits);
+        // 将 -1~1 映射到 0~levels-1
+        // Normalize: (-1 to 1) -> (0 to 1)
+        let normalized = (value + 1) / 2;
+        // Clamp
+        if(normalized < 0) normalized = 0;
+        if(normalized > 1) normalized = 1;
+        
+        // Quantize
+        let level = Math.floor(normalized * (levels - 1) + 0.5); // round to nearest level
+        
+        // Back to voltage (-1 to 1) for drawing
+        let quantizedVoltage = (level / (levels - 1)) * 2 - 1;
+        
+        return {
+            voltage: quantizedVoltage,
+            levelIndex: level,
+            maxLevel: levels
+        };
+    }
+
+    function toBinary(num, bits) {
+        let bin = num.toString(2);
+        while(bin.length < bits) {
+            bin = "0" + bin;
+        }
+        return bin;
+    }
+
+    // 事件监听
+    inputs.freq.addEventListener('input', (e) => {
+        config.signalFreq = parseFloat(e.target.value);
+        displays.freq.innerText = config.signalFreq;
+    });
+    inputs.rate.addEventListener('input', (e) => {
+        config.sampleRate = parseInt(e.target.value);
+        displays.rate.innerText = config.sampleRate;
+    });
+    inputs.bit.addEventListener('input', (e) => {
+        config.bitDepth = parseInt(e.target.value);
+        displays.bit.innerText = config.bitDepth + "-bit";
+        displays.levels.innerText = Math.pow(2, config.bitDepth);
+    });
+    inputs.toggle.addEventListener('click', () => {
+        config.isRunning = !config.isRunning;
+        displays.status.innerText = config.isRunning ? "运行中" : "已暂停";
+        displays.status.style.color = config.isRunning ? "#89b4fa" : "#f38ba8";
+    });
+    inputs.reset.addEventListener('click', () => {
+        analogData = [];
+        digitalData = [];
+        config.time = 0;
+        lastSampleTime = -1;
+        binaryContainer.innerHTML = '';
+    });
+
+    // 添加二进制块到 UI
+    function addBinaryPacket(code) {
+        const span = document.createElement('span');
+        span.className = 'bit-packet';
+        span.innerText = code;
+        
+        // 插入到最前面
+        if(binaryContainer.children.length > 0) {
+            binaryContainer.insertBefore(span, binaryContainer.children[0]);
+        } else {
+            binaryContainer.appendChild(span);
+        }
+
+        // 移除过多的元素以保持性能
+        if(binaryContainer.children.length > 20) {
+            binaryContainer.removeChild(binaryContainer.lastChild);
+        }
+    }
+
+    // 主循环
+    function loop() {
+        if (config.isRunning) {
+            // 1. 生成模拟信号数据
+            const currentVoltage = Math.sin(2 * Math.PI * config.signalFreq * config.time);
+            
+            // 推入历史数据
+            analogData.push({ time: config.time, val: currentVoltage });
+            if(analogData.length > config.maxHistory) analogData.shift();
+
+            // 2. 采样逻辑
+            // 如果当前时间超过了上次采样时间 + 采样间隔
+            const sampleInterval = 1 / config.sampleRate;
+            
+            if (config.time >= lastSampleTime + sampleInterval) {
+                // 执行采样
+                const qResult = quantize(currentVoltage, config.bitDepth);
+                const binaryCode = toBinary(qResult.levelIndex, config.bitDepth);
+
+                digitalData.push({
+                    startTime: config.time,
+                    val: qResult.voltage,
+                    code: binaryCode
+                });
+                
+                lastSampleTime = config.time;
+                addBinaryPacket(binaryCode);
+            }
+
+            // 清理过期的数字信号数据
+            if(digitalData.length > 0 && digitalData[0].startTime < analogData[0].time) {
+                digitalData.shift();
+            }
+
+            // 更新时间
+            config.time += config.speed;
+        }
+
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    // 绘图函数
+    function draw() {
+        // 清屏
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if(analogData.length < 2) return;
+
+        // 计算X轴缩放 (将 analogData 的时间范围映射到 canvas 宽度)
+        const timeWindow = analogData[analogData.length-1].time - analogData[0].time;
+        const endTime = analogData[analogData.length-1].time;
+        
+        function getX(t) {
+            const relativeTime = t - (endTime - timeWindow); // 0 to timeWindow
+            return (relativeTime / timeWindow) * canvas.width;
+        }
+
+        // --- 绘制背景量化网格 ---
+        ctx.strokeStyle = "#333344";
+        ctx.lineWidth = 1;
+        const levels = Math.pow(2, config.bitDepth);
+        ctx.beginPath();
+        for(let i=0; i<levels; i++) {
+            // 将 level index 转换为 voltage (-1 ~ 1)
+            let v = (i / (levels - 1)) * 2 - 1;
+            let y = mapY(v);
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+        }
+        ctx.stroke();
+
+        // --- 绘制模拟信号 (Sine Wave) ---
+        ctx.beginPath();
+        ctx.strokeStyle = "#a6e3a1"; // Green
+        ctx.lineWidth = 2;
+        ctx.lineJoin = "round";
+        
+        for (let i = 0; i < analogData.length; i++) {
+            const pt = analogData[i];
+            const x = getX(pt.time);
+            const y = mapY(pt.val);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // --- 绘制数字信号 (阶梯状) ---
+        ctx.beginPath();
+        ctx.strokeStyle = "#f38ba8"; // Pink
+        ctx.lineWidth = 3;
+        
+        // 我们需要绘制阶梯：从一个采样点水平画到下一个采样点的时间
+        for (let i = 0; i < digitalData.length; i++) {
+            const pt = digitalData[i];
+            const startX = getX(pt.startTime);
+            const y = mapY(pt.val);
+            
+            // 结束时间是下一个点的开始时间，或者是当前总时间的末尾
+            let endT = (i < digitalData.length - 1) ? digitalData[i+1].startTime : endTime;
+            // 如果正在运行且是最后一段，稍微延伸一点到当前扫描线
+            if(i === digitalData.length - 1 && config.isRunning) endT = config.time;
+
+            const endX = getX(endT);
+
+            // 只有当点在屏幕范围内才绘制
+            if (endX > 0) {
+                // 垂直线 (采样瞬间) - 可选，如果想让它看起来完全像阶梯
+                if (i > 0) {
+                    const prevY = mapY(digitalData[i-1].val);
+                    ctx.moveTo(startX, prevY); 
+                    ctx.lineTo(startX, y);
+                } else {
+                    ctx.moveTo(startX, y);
+                }
+                // 水平线 (保持阶段)
+                ctx.lineTo(endX, y);
+                
+                // 绘制采样点的小圆点
+                // ctx.fillStyle = "#f38ba8";
+                // ctx.fillRect(startX - 2, y - 2, 4, 4);
+            }
+        }
+        ctx.stroke();
+
+        // --- 绘制扫描线 (当前时间) ---
+        /*
+        ctx.beginPath();
+        ctx.strokeStyle = "#fff";
+        ctx.setLineDash([5, 5]);
+        ctx.moveTo(canvas.width - 1, 0);
+        ctx.lineTo(canvas.width - 1, canvas.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        */
+    }
+
+    // 启动
+    loop();
+
+</script>
+
+</body>
+</html>

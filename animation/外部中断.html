@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>51单片机 外部中断原理 (修复边沿触发逻辑)</title>
+    <style>
+        :root {
+            --bg-color: #000000;
+            --panel-bg: #1a1a1a;
+            --text-color: #eeeeee;
+            
+            /* INT0 颜色 */
+            --int0-color: #ff0055;
+            /* INT1 颜色 */
+            --int1-color: #00e5ff;
+            
+            --current-accent: var(--int0-color);
+
+            --btn-primary: #6200ea;
+            --signal-inactive: #444;
+            --signal-high: #00ff00;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            height: 100%;
+        }
+
+        /* --- 左侧控制面板 --- */
+        .sidebar {
+            width: 340px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            box-shadow: 5px 0 20px rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            border-right: 2px solid #333;
+            z-index: 20;
+            flex-shrink: 0;
+        }
+
+        h2 { color: #fff; margin: 0 0 5px 0; letter-spacing: 1px; }
+        .subtitle { font-size: 0.9rem; color: #888; margin-bottom: 10px; }
+
+        .control-group {
+            background: rgba(255,255,255,0.08);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            transition: border-color 0.3s;
+        }
+
+        .control-group h3 { margin: 0 0 12px 0; font-size: 1.1rem; color: #ffd700; border-bottom: 1px solid #555; padding-bottom: 5px;}
+
+        label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 1rem; cursor: pointer; }
+
+        .push-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(to bottom, #444, #222);
+            border: 2px solid #666;
+            border-radius: 50px;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            box-shadow: 0 5px 0 #000;
+            transition: all 0.1s;
+            user-select: none;
+        }
+        .push-btn:active, .push-btn.pressed {
+            transform: translateY(4px);
+            box-shadow: 0 1px 0 #000;
+            border-color: var(--current-accent);
+            color: var(--current-accent);
+        }
+
+        select {
+            width: 100%; padding: 10px; background: #000; color: #fff;
+            border: 1px solid #666; border-radius: 4px; font-size: 1rem; margin-bottom: 5px;
+        }
+
+        .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #444; transition: .3s; border-radius: 26px; border: 1px solid #777;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 18px; width: 18px;
+            left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--current-accent); border-color: var(--current-accent); }
+        input:checked + .slider:before { transform: translateX(24px); }
+
+        button.action {
+            width: 100%; padding: 12px; border: none; border-radius: 6px;
+            cursor: pointer; font-weight: bold; font-size: 1rem;
+            background-color: #333; color: #fff; border: 1px solid #555;
+            margin-top: 5px; transition: 0.2s;
+        }
+        button.action:hover { background-color: #444; }
+        
+        .indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #333; margin-right: 8px; }
+        .indicator.active { background: var(--current-accent); box-shadow: 0 0 10px var(--current-accent); }
+
+        /* --- 右侧演示区 --- */
+        .main-display {
+            flex: 1;
+            background-color: #000;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .canvas-wrapper {
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: #050505;
+            box-shadow: 0 0 50px rgba(255,255,255,0.05);
+            max-width: 100%;
+            max-height: 100%;
+            overflow: auto;
+        }
+
+        canvas { display: block; }
+
+        .status-bar {
+            width: 100%; padding: 15px 20px; background: #111; border-top: 1px solid #333;
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+            color: #aaa; font-size: 0.9rem; height: 160px; overflow-y: auto;
+        }
+        .note-card { border-left: 3px solid var(--current-accent); padding-left: 10px; }
+        .note-card h4 { color: var(--current-accent); margin: 0 0 5px 0; }
+        .note-card p { margin: 0; line-height: 1.4; }
+        
+        /* 提示动画 */
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        .auto-clear-msg {
+            position: absolute; top: 20px; right: 20px;
+            background: rgba(0, 255, 0, 0.2); border: 1px solid #00ff00;
+            color: #fff; padding: 10px 20px; border-radius: 5px;
+            pointer-events: none; opacity: 0; transition: opacity 0.3s;
+        }
+        .auto-clear-msg.show { opacity: 1; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <aside class="sidebar">
+        <h2>外部中断演示</h2>
+        <div class="subtitle">INT0 / INT1 原理 (优化版)</div>
+
+        <div class="control-group" style="border-color: var(--current-accent);">
+            <h3 style="color: var(--current-accent);">1. 中断源选择</h3>
+            <select id="int-select">
+                <option value="0">INT0 (P3.2) - 优先级高</option>
+                <option value="1">INT1 (P3.3) - 优先级低</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <h3>2. 信号输入 (<span id="lbl-pin">P3.2</span>)</h3>
+            <div class="push-btn" id="pin-btn">按下触发 (Low)</div>
+            <div style="margin-top: 10px; display:flex; justify-content:space-between;">
+                <span>引脚电平:</span>
+                <span id="pin-status" style="color:#00ff00">High (5V)</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>3. TCON 配置</h3>
+            <label>
+                <span id="lbl-it">IT0 (触发方式)</span>
+                <label class="switch"><input type="checkbox" id="it-switch"><span class="slider"></span></label>
+            </label>
+            <div id="it-desc" style="font-size:0.85rem; color:#aaa; text-align:right;">
+                当前: 低电平触发
+            </div>
+        </div>
+
+        <div class="control-group">
+            <h3>4. IE 中断允许</h3>
+            <label>
+                <span id="lbl-ex">EX0 (独立允许)</span>
+                <label class="switch"><input type="checkbox" id="ex-switch"><span class="slider"></span></label>
+            </label>
+            <label>
+                <span>EA (总中断允许)</span>
+                <label class="switch"><input type="checkbox" id="ea-switch"><span class="slider"></span></label>
+            </label>
+        </div>
+
+        <div class="control-group">
+            <h3>CPU 状态</h3>
+            <div style="margin-bottom: 10px;">
+                <span class="indicator" id="flag-led"></span> <span id="lbl-ie">IE0</span> 标志位
+            </div>
+            <div>
+                <span class="indicator" id="cpu-led"></span> CPU 响应中断
+            </div>
+            <button class="action" id="clr-btn">手动清除标志 (RETI)</button>
+        </div>
+    </aside>
+
+    <main class="main-display">
+        <div class="auto-clear-msg" id="ac-msg">硬件自动清除标志位</div>
+        <div class="canvas-wrapper">
+            <canvas id="simCanvas" width="1100" height="600"></canvas>
+        </div>
+    </main>
+</div>
+
+<footer class="status-bar">
+    <div class="note-card">
+        <h4>边沿触发 (关键点)</h4>
+        <p><strong>ITx = 1:</strong> 硬件检测到下降沿时置位标志。<strong>当 CPU 响应中断转向 ISR 时，硬件会自动清除标志位。</strong>因此中断只会触发一次，即使按钮一直按着。</p>
+    </div>
+    <div class="note-card">
+        <h4>电平触发</h4>
+        <p><strong>ITx = 0:</strong> 只要引脚是低电平，标志位就一直锁存为1。CPU 响应完一次后，如果引脚还是低，会立即再次触发中断。</p>
+    </div>
+    <div class="note-card">
+        <h4>演示说明</h4>
+        <p>在“下降沿触发”模式下，请观察信号到达 CPU 后，IE 标志位会在短暂延迟后<strong>自动消失</strong>，模拟硬件复位过程。</p>
+    </div>
+</footer>
+
+<script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    const acMsg = document.getElementById('ac-msg');
+
+    const interrupts = [
+        {
+            id: 0, name: "INT0", pinName: "P3.2", flagName: "IE0", enableName: "EX0", triggerName: "IT0", vector: "0003H", color: "#ff0055",
+            pinHigh: true, it: 0, ie: 0, ex: 0, prevPinHigh: true, isClearing: false
+        },
+        {
+            id: 1, name: "INT1", pinName: "P3.3", flagName: "IE1", enableName: "EX1", triggerName: "IT1", vector: "0013H", color: "#00e5ff",
+            pinHigh: true, it: 0, ie: 0, ex: 0, prevPinHigh: true, isClearing: false
+        }
+    ];
+
+    const state = { activeId: 0, ea: 0, cpuResponding: false };
+
+    const ui = {
+        select: document.getElementById('int-select'),
+        btn: document.getElementById('pin-btn'),
+        status: document.getElementById('pin-status'),
+        lblPin: document.getElementById('lbl-pin'),
+        lblIt: document.getElementById('lbl-it'),
+        lblEx: document.getElementById('lbl-ex'),
+        lblIe: document.getElementById('lbl-ie'),
+        itSwitch: document.getElementById('it-switch'),
+        itDesc: document.getElementById('it-desc'),
+        exSwitch: document.getElementById('ex-switch'),
+        eaSwitch: document.getElementById('ea-switch'),
+        flagLed: document.getElementById('flag-led'),
+        cpuLed: document.getElementById('cpu-led'),
+        clrBtn: document.getElementById('clr-btn'),
+        root: document.documentElement
+    };
+
+    function updateUIFromState() {
+        const active = interrupts[state.activeId];
+        ui.root.style.setProperty('--current-accent', active.color);
+        ui.lblPin.innerText = active.pinName;
+        ui.lblIt.innerText = active.triggerName;
+        ui.lblEx.innerText = active.enableName;
+        ui.lblIe.innerText = active.flagName;
+        ui.itSwitch.checked = active.it === 1;
+        ui.itDesc.innerText = active.it ? "当前: 下降沿触发 (自动清除)" : "当前: 低电平触发 (持续)";
+        ui.exSwitch.checked = active.ex === 1;
+        ui.eaSwitch.checked = state.ea === 1;
+
+        if (active.pinHigh) {
+            ui.btn.classList.remove('pressed');
+            ui.status.innerText = "High (5V)";
+            ui.status.style.color = "#00ff00";
+        } else {
+            ui.btn.classList.add('pressed');
+            ui.status.innerText = "Low (0V)";
+            ui.status.style.color = active.color;
+        }
+    }
+
+    ui.select.addEventListener('change', (e) => { state.activeId = parseInt(e.target.value); updateUIFromState(); });
+    const pressBtn = () => { interrupts[state.activeId].pinHigh = false; updateUIFromState(); };
+    const releaseBtn = () => { interrupts[state.activeId].pinHigh = true; updateUIFromState(); };
+    ui.btn.addEventListener('mousedown', pressBtn);
+    ui.btn.addEventListener('mouseup', releaseBtn);
+    ui.btn.addEventListener('mouseleave', releaseBtn);
+    ui.btn.addEventListener('touchstart', (e) => { e.preventDefault(); pressBtn(); });
+    ui.btn.addEventListener('touchend', releaseBtn);
+
+    ui.itSwitch.addEventListener('change', (e) => {
+        const active = interrupts[state.activeId];
+        active.it = e.target.checked ? 1 : 0;
+        active.ie = 0; // Reset flag
+        active.isClearing = false;
+        updateUIFromState();
+    });
+    ui.exSwitch.addEventListener('change', (e) => { interrupts[state.activeId].ex = e.target.checked ? 1 : 0; });
+    ui.eaSwitch.addEventListener('change', (e) => { state.ea = e.target.checked ? 1 : 0; });
+    ui.clrBtn.addEventListener('click', () => { interrupts[state.activeId].ie = 0; interrupts[state.activeId].isClearing = false; });
+
+    function updateLogic() {
+        let anyInterruptActive = false;
+
+        interrupts.forEach(intObj => {
+            // 1. Edge Detection
+            const fallingEdge = intObj.prevPinHigh && !intObj.pinHigh;
+            intObj.prevPinHigh = intObj.pinHigh;
+
+            // 2. Flag Logic
+            if (intObj.it === 1) {
+                // --- Edge Mode ---
+                if (fallingEdge) {
+                    intObj.ie = 1;
+                }
+                
+                // Check if fully enabled and currently interrupting CPU
+                if (intObj.ie && intObj.ex && state.ea) {
+                    // Simulate Hardware Auto-Clear
+                    if (!intObj.isClearing) {
+                        intObj.isClearing = true;
+                        // Delay to allow user to see the interrupt happen, then clear it
+                        setTimeout(() => {
+                            // Only clear if we are still in Edge Mode (user didn't switch mid-way)
+                            if (intObj.it === 1) {
+                                intObj.ie = 0;
+                                intObj.isClearing = false;
+                                // Show visual feedback only if this is the active view
+                                if(interrupts[state.activeId] === intObj) {
+                                    acMsg.classList.add('show');
+                                    setTimeout(() => acMsg.classList.remove('show'), 1500);
+                                }
+                            } else {
+                                intObj.isClearing = false;
+                            }
+                        }, 800); // 800ms delay before hardware clears the flag
+                    }
+                }
+            } else {
+                // --- Level Mode ---
+                intObj.isClearing = false; // No auto clear in Level mode
+                if (!intObj.pinHigh) intObj.ie = 1;
+                else intObj.ie = 0; // Flag follows level
+            }
+
+            // 3. Determine if CPU should be responding NOW
+            // Note: In Edge mode, once 'ie' is cleared by timeout, request stops.
+            const request = intObj.ie && intObj.ex && state.ea;
+            if (request) anyInterruptActive = true;
+        });
+
+        state.cpuResponding = anyInterruptActive;
+
+        const active = interrupts[state.activeId];
+        ui.flagLed.className = active.ie ? "indicator active" : "indicator";
+        ui.cpuLed.className = state.cpuResponding ? "indicator active" : "indicator";
+    }
+
+    const pos = {
+        pin: {x: 80, y: 300}, tconBox: {x: 250, y: 250, w: 180, h: 120}, 
+        ieFlag: {x: 380, y: 300}, exSwitch: {x: 550, y: 300}, eaSwitch: {x: 750, y: 300}, cpu: {x: 950, y: 300}
+    };
+
+    function drawWire(x1, y1, x2, y2, active, color=null) {
+        ctx.beginPath(); ctx.lineWidth = 6; ctx.lineCap = "round";
+        if (color) ctx.strokeStyle = color; else ctx.strokeStyle = active ? interrupts[state.activeId].color : "#444";
+        ctx.moveTo(x1, y1);
+        const midX = x1 + (x2 - x1) / 2;
+        if (Math.abs(y1 - y2) < 10) ctx.lineTo(x2, y2); else { ctx.lineTo(midX, y1); ctx.lineTo(midX, y2); ctx.lineTo(x2, y2); }
+        if (active) { ctx.shadowBlur = 15; ctx.shadowColor = ctx.strokeStyle; } else { ctx.shadowBlur = 0; }
+        ctx.stroke(); ctx.shadowBlur = 0;
+    }
+
+    function drawSwitchSymbol(x, y, closed, label) {
+        ctx.fillStyle = "#111"; ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+        ctx.fillRect(x-30, y-40, 60, 80); ctx.strokeRect(x-30, y-40, 60, 80);
+        ctx.fillStyle = "#fff"; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "center"; ctx.fillText(label, x, y-50);
+        ctx.beginPath(); ctx.arc(x-20, y+10, 4, 0, Math.PI*2); ctx.fillStyle="#fff"; ctx.fill();
+        ctx.beginPath(); ctx.arc(x+20, y+10, 4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.strokeStyle = "#ffd700"; ctx.lineWidth = 4;
+        ctx.moveTo(x-20, y+10); if (closed) ctx.lineTo(x+20, y+10); else ctx.lineTo(x+15, y-10); ctx.stroke();
+    }
+
+    function draw() {
+        const active = interrupts[state.activeId];
+        const accent = active.color;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const pinColor = active.pinHigh ? "#00ff00" : "#333";
+        const internalSignal = !active.pinHigh; 
+        
+        ctx.fillStyle = pinColor; ctx.font = "bold 24px sans-serif";
+        ctx.fillText(active.pinHigh ? `${active.pinName} (High)` : `${active.pinName} (Low)`, pos.pin.x, pos.pin.y - 20);
+        drawWire(pos.pin.x, pos.pin.y, pos.tconBox.x, pos.pin.y, internalSignal, pinColor);
+        
+        ctx.strokeStyle = "#888"; ctx.lineWidth = 2; ctx.setLineDash([5,5]);
+        ctx.strokeRect(pos.tconBox.x, pos.tconBox.y, pos.tconBox.w, pos.tconBox.h);
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#aaa"; ctx.font = "14px sans-serif";
+        ctx.fillText("TCON", pos.tconBox.x + 90, pos.tconBox.y - 10);
+
+        ctx.fillStyle = "#ccc"; ctx.font = "12px sans-serif";
+        ctx.fillText(active.it ? "下降沿" : "低电平", pos.tconBox.x + 60, pos.tconBox.y + 30);
+        ctx.beginPath(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
+        if(active.it) {
+            ctx.moveTo(pos.tconBox.x + 20, pos.tconBox.y + 50); ctx.lineTo(pos.tconBox.x + 35, pos.tconBox.y + 50);
+            ctx.lineTo(pos.tconBox.x + 35, pos.tconBox.y + 70); ctx.lineTo(pos.tconBox.x + 50, pos.tconBox.y + 70);
+            ctx.moveTo(pos.tconBox.x + 32, pos.tconBox.y + 60); ctx.lineTo(pos.tconBox.x + 35, pos.tconBox.y + 65); ctx.lineTo(pos.tconBox.x + 38, pos.tconBox.y + 60);
+        } else {
+            ctx.moveTo(pos.tconBox.x + 20, pos.tconBox.y + 60); ctx.lineTo(pos.tconBox.x + 50, pos.tconBox.y + 60);
+            ctx.fillText("LOW", pos.tconBox.x + 35, pos.tconBox.y + 55);
+        }
+        ctx.stroke();
+
+        const flagSet = active.ie === 1;
+        drawWire(pos.tconBox.x + 60, pos.pin.y, pos.ieFlag.x, pos.pin.y, flagSet);
+
+        ctx.fillStyle = flagSet ? accent : "#333";
+        ctx.fillRect(pos.ieFlag.x - 25, pos.ieFlag.y - 25, 50, 50);
+        ctx.strokeStyle = "#fff"; ctx.strokeRect(pos.ieFlag.x - 25, pos.ieFlag.y - 25, 50, 50);
+        ctx.fillStyle = "#fff"; ctx.font = "bold 20px sans-serif"; ctx.textAlign = "center";
+        ctx.fillText(active.flagName, pos.ieFlag.x, pos.ieFlag.y + 8);
+        if (flagSet) { ctx.shadowBlur = 20; ctx.shadowColor = accent; ctx.strokeRect(pos.ieFlag.x - 25, pos.ieFlag.y - 25, 50, 50); ctx.shadowBlur = 0; }
+
+        drawWire(pos.ieFlag.x + 25, pos.pin.y, pos.exSwitch.x - 30, pos.pin.y, flagSet);
+        drawSwitchSymbol(pos.exSwitch.x, pos.exSwitch.y, active.ex, active.enableName);
+
+        const afterEx = flagSet && active.ex;
+        drawWire(pos.exSwitch.x + 30, pos.pin.y, pos.eaSwitch.x - 30, pos.pin.y, afterEx);
+        drawSwitchSymbol(pos.eaSwitch.x, pos.eaSwitch.y, state.ea, "EA");
+
+        const finalSignal = afterEx && state.ea;
+        drawWire(pos.eaSwitch.x + 30, pos.pin.y, pos.cpu.x, pos.pin.y, finalSignal);
+
+        ctx.fillStyle = "#222"; ctx.strokeStyle = finalSignal ? accent : "#666"; ctx.lineWidth = 4;
+        ctx.fillRect(pos.cpu.x, pos.cpu.y - 70, 120, 140); ctx.strokeRect(pos.cpu.x, pos.cpu.y - 70, 120, 140);
+        ctx.fillStyle = "#fff"; ctx.font = "bold 24px sans-serif"; ctx.textAlign = "left";
+        ctx.fillText("CPU", pos.cpu.x + 35, pos.cpu.y - 30);
+        ctx.font = "16px sans-serif"; ctx.fillStyle = "#aaa";
+        ctx.fillText("Jump to:", pos.cpu.x + 20, pos.cpu.y + 10);
+        ctx.fillStyle = accent; ctx.font = "bold 20px monospace";
+        ctx.fillText(active.vector, pos.cpu.x + 20, pos.cpu.y + 40);
+
+        if (finalSignal) {
+            ctx.globalAlpha = 0.6 + Math.sin(Date.now() / 100) * 0.4;
+            ctx.fillStyle = accent; ctx.fillRect(pos.cpu.x, pos.cpu.y - 70, 120, 140);
+            ctx.globalAlpha = 1.0;
+            ctx.fillStyle = "#fff"; ctx.font = "bold 18px sans-serif";
+            ctx.fillText("INTERRUPT!", pos.cpu.x + 5, pos.cpu.y - 90);
+        }
+    }
+
+    function loop() { updateLogic(); draw(); requestAnimationFrame(loop); }
+    updateUIFromState(); loop();
+</script>
+</body>
+</html>

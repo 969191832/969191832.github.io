@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>51单片机 定时器T0 原理 (大屏演示版)</title>
+    <style>
+        :root {
+            --bg-color: #000000;       /* 纯黑背景 */
+            --panel-bg: #1a1a1a;       /* 侧边栏深灰 */
+            --text-color: #eeeeee;     /* 亮白文字 */
+            --accent-color: #00e5ff;   /* 强调色：青色 */
+            --btn-primary: #2979ff;    /* 按钮蓝 */
+            --btn-action: #ff9100;     /* 动作按钮橙 */
+            
+            /* 信号线颜色 */
+            --signal-active: #00ff00;  /* 激活：高亮绿 */
+            --signal-inactive: #555555;/* 未激活：中灰 */
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            height: 100%;
+        }
+
+        /* --- 左侧控制面板 --- */
+        .sidebar {
+            width: 340px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            box-shadow: 5px 0 20px rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            border-right: 2px solid #333;
+            z-index: 20;
+            flex-shrink: 0; /* 防止被压缩 */
+        }
+
+        h2 { color: var(--accent-color); margin: 0 0 5px 0; letter-spacing: 1px; }
+        .subtitle { font-size: 0.9rem; color: #888; margin-bottom: 10px; }
+
+        .control-group {
+            background: rgba(255,255,255,0.08);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+
+        .control-group h3 { margin: 0 0 12px 0; font-size: 1.1rem; color: #ffd700; border-bottom: 1px solid #555; padding-bottom: 5px;}
+
+        label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 1rem; cursor: pointer; }
+        
+        /* 输入框组 (初值设置) */
+        .input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .input-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .input-wrapper span { font-size: 0.8rem; color: #aaa; margin-bottom: 2px;}
+        
+        input[type=text] {
+            background: #000;
+            border: 1px solid #666;
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            text-align: center;
+            font-family: monospace;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+        }
+        input[type=text]:focus { border-color: var(--accent-color); outline: none; }
+
+        /* 开关样式 */
+        .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #444; transition: .3s; border-radius: 26px; border: 1px solid #777;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 18px; width: 18px;
+            left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--btn-primary); border-color: var(--btn-primary); }
+        input:checked + .slider:before { transform: translateX(24px); }
+
+        select, input[type=range] {
+            width: 100%; background: #000; color: #fff; border: 1px solid #666;
+            padding: 8px; border-radius: 4px; font-size: 1rem; margin-bottom: 5px;
+        }
+
+        button {
+            width: 100%; padding: 12px; border: none; border-radius: 6px;
+            cursor: pointer; font-weight: bold; font-size: 1rem;
+            transition: transform 0.1s, filter 0.2s;
+            color: #fff;
+        }
+        button:active { transform: scale(0.98); }
+        .btn-load { background-color: var(--btn-primary); margin-top: 5px; }
+        .btn-pulse { background-color: var(--btn-action); color: #000; margin-top: 10px; }
+        .btn-reset { background-color: #d32f2f; margin-top: 5px;}
+
+        /* --- 右侧演示区 --- */
+        .main-display {
+            flex: 1;
+            background-color: #000;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .canvas-wrapper {
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: #050505;
+            box-shadow: 0 0 50px rgba(255,255,255,0.02);
+            /* 确保Canvas不会超过屏幕 */
+            max-width: 100%;
+            max-height: 100%;
+            overflow: auto;
+        }
+
+        canvas { display: block; }
+
+        /* 底部说明 */
+        .status-bar {
+            width: 100%;
+            padding: 10px 20px;
+            background: #111;
+            border-top: 1px solid #333;
+            display: flex;
+            justify-content: space-around;
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <aside class="sidebar">
+        <h2>Timer 0 演示</h2>
+        <div class="subtitle">大屏高对比度版</div>
+
+        <!-- 模式选择 -->
+        <div class="control-group">
+            <h3>1. 模式 (TMOD)</h3>
+            <select id="mode-select">
+                <option value="0">Mode 0: 13位定时器</option>
+                <option value="1" selected>Mode 1: 16位定时器 (标准)</option>
+                <option value="2">Mode 2: 8位自动重装</option>
+                <option value="3">Mode 3: 双8位 (Split)</option>
+            </select>
+        </div>
+
+        <!-- 信号源与初值 -->
+        <div class="control-group">
+            <h3>2. 配置与初值</h3>
+            
+            <!-- C/T Switch -->
+            <label>
+                <span>C/T (定时/计数)</span>
+                <label class="switch"><input type="checkbox" id="ct-switch"><span class="slider"></span></label>
+            </label>
+            <div id="ct-desc" style="font-size:0.9rem; color:#aaa; margin-bottom:15px; text-align:right;">内部时钟 (Fosc/12)</div>
+
+            <!-- 初值设置 -->
+            <div class="input-row">
+                <div class="input-wrapper">
+                    <span>TH0 (Hex)</span>
+                    <input type="text" id="init-th0" value="FC" maxlength="2">
+                </div>
+                <div class="input-wrapper">
+                    <span>TL0 (Hex)</span>
+                    <input type="text" id="init-tl0" value="18" maxlength="2">
+                </div>
+            </div>
+            <button id="load-btn" class="btn-load">装载初值 (Load)</button>
+            
+            <button id="pulse-btn" class="btn-pulse" style="display:none;">点击产生脉冲 (P3.4)</button>
+        </div>
+
+        <!-- 启动控制 -->
+        <div class="control-group">
+            <h3>3. 启动控制</h3>
+            <label>
+                <span>TR0 (软件启动)</span>
+                <label class="switch"><input type="checkbox" id="tr0-switch"><span class="slider"></span></label>
+            </label>
+            <label>
+                <span>GATE (门控位)</span>
+                <label class="switch"><input type="checkbox" id="gate-switch"><span class="slider"></span></label>
+            </label>
+            <label>
+                <span>INT0 (外部中断)</span>
+                <label class="switch"><input type="checkbox" id="int0-switch" checked><span class="slider"></span></label>
+            </label>
+            
+            <div style="margin-top: 15px;">
+                <span>演示速度</span>
+                <input type="range" id="speed-range" min="1" max="20" value="5">
+            </div>
+        </div>
+
+        <!-- 状态与重置 -->
+        <div class="control-group">
+            <button class="btn-reset" id="reset-btn">系统复位 (Reset)</button>
+        </div>
+    </aside>
+
+    <main class="main-display">
+        <div class="canvas-wrapper">
+            <!-- 放大画布尺寸到 1200x750 -->
+            <canvas id="simCanvas" width="1200" height="750"></canvas>
+        </div>
+        <div class="status-bar">
+            <div class="legend-item"><span class="dot" style="background:#00ff00; box-shadow:0 0 10px #00ff00"></span> 信号通 (Active)</div>
+            <div class="legend-item"><span class="dot" style="background:#555"></span> 信号断 (Inactive)</div>
+            <div class="legend-item"><span class="dot" style="background:#ff0000; box-shadow:0 0 10px red"></span> 中断发生 (Interrupt)</div>
+        </div>
+    </main>
+</div>
+
+<script>
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // --- State Management ---
+    const state = {
+        mode: 1,
+        th0: 0,
+        tl0: 0,
+        tf0: 0,
+        tr0: 0,
+        gate: 0,
+        int0: 1,
+        c_t: 0,
+        sysClk: 0,
+        isRunning: false,
+        lastPulse: 0,
+        simSpeed: 5
+    };
+
+    // --- UI References ---
+    const ui = {
+        mode: document.getElementById('mode-select'),
+        ct: document.getElementById('ct-switch'),
+        ctDesc: document.getElementById('ct-desc'),
+        pulseBtn: document.getElementById('pulse-btn'),
+        tr0: document.getElementById('tr0-switch'),
+        gate: document.getElementById('gate-switch'),
+        int0: document.getElementById('int0-switch'),
+        speed: document.getElementById('speed-range'),
+        reset: document.getElementById('reset-btn'),
+        // New Init Inputs
+        initTh0: document.getElementById('init-th0'),
+        initTl0: document.getElementById('init-tl0'),
+        loadBtn: document.getElementById('load-btn')
+    };
+
+    // --- Event Listeners ---
+    ui.mode.addEventListener('change', (e) => { state.mode = parseInt(e.target.value); resetRegs(); });
+    
+    ui.ct.addEventListener('change', (e) => { 
+        state.c_t = e.target.checked ? 1 : 0; 
+        ui.ctDesc.innerText = state.c_t ? "外部引脚 (P3.4 计数)" : "内部时钟 (Fosc/12)";
+        ui.ctDesc.style.color = state.c_t ? "#00e5ff" : "#aaa";
+        ui.pulseBtn.style.display = state.c_t ? "block" : "none";
+    });
+
+    ui.tr0.addEventListener('change', (e) => state.tr0 = e.target.checked ? 1 : 0);
+    ui.gate.addEventListener('change', (e) => state.gate = e.target.checked ? 1 : 0);
+    ui.int0.addEventListener('change', (e) => state.int0 = e.target.checked ? 1 : 0);
+    ui.speed.addEventListener('input', (e) => state.simSpeed = parseInt(e.target.value));
+    
+    ui.reset.addEventListener('click', resetRegs);
+
+    // Load Initial Values Logic
+    ui.loadBtn.addEventListener('click', () => {
+        // Parse Hex inputs
+        let h = parseInt(ui.initTh0.value, 16);
+        let l = parseInt(ui.initTl0.value, 16);
+        
+        // Validation (0-255)
+        if (isNaN(h)) h = 0;
+        if (isNaN(l)) l = 0;
+        h = h & 0xFF;
+        l = l & 0xFF;
+
+        // Update State
+        state.th0 = h;
+        state.tl0 = l;
+        state.tf0 = 0; // Clear overflow when manually loading
+        
+        // Format back to input to show cleaned value
+        ui.initTh0.value = h.toString(16).toUpperCase().padStart(2, '0');
+        ui.initTl0.value = l.toString(16).toUpperCase().padStart(2, '0');
+    });
+
+    // Manual Pulse Button
+    let manualPulse = false;
+    ui.pulseBtn.addEventListener('mousedown', () => manualPulse = true);
+    ui.pulseBtn.addEventListener('mouseup', () => manualPulse = false);
+    ui.pulseBtn.addEventListener('mouseleave', () => manualPulse = false);
+
+    function resetRegs() {
+        state.th0 = 0;
+        state.tl0 = 0;
+        state.tf0 = 0;
+    }
+
+    // --- Logic Engine ---
+    function step() {
+        // Gate Logic: (NOT GATE) OR INT0
+        const gateLogic = (!state.gate) || state.int0;
+        state.isRunning = state.tr0 && gateLogic;
+
+        let clockPulse = false;
+        
+        if (state.c_t === 0) {
+            // Timer Mode
+            state.sysClk++;
+            if (state.sysClk >= (21 - state.simSpeed)) {
+                clockPulse = true;
+                state.sysClk = 0;
+            }
+        } else {
+            // Counter Mode (Edge detection)
+            if (manualPulse && !state.lastPulse) {
+                clockPulse = true;
+            }
+            state.lastPulse = manualPulse;
+        }
+
+        if (state.isRunning && clockPulse) {
+            incrementCounter();
+        }
+    }
+
+    function incrementCounter() {
+        if (state.mode === 0) {
+            // Mode 0: 13-bit
+            let val = (state.th0 << 5) + (state.tl0 & 0x1F);
+            val++;
+            if (val > 8191) { val = 0; state.tf0 = 1; }
+            state.tl0 = val & 0x1F; 
+            state.th0 = (val >> 5) & 0xFF;
+        } 
+        else if (state.mode === 1) {
+            // Mode 1: 16-bit
+            state.tl0++;
+            if (state.tl0 > 255) {
+                state.tl0 = 0; 
+                state.th0++;
+                if (state.th0 > 255) { 
+                    state.th0 = 0; 
+                    state.tf0 = 1; 
+                }
+            }
+        }
+        else if (state.mode === 2) {
+            // Mode 2: Auto Reload
+            state.tl0++;
+            if (state.tl0 > 255) { 
+                state.tl0 = state.th0; // Reload from TH0
+                state.tf0 = 1; 
+            }
+        }
+        else if (state.mode === 3) {
+            // Mode 3
+            state.tl0++;
+            if (state.tl0 > 255) { state.tl0 = 0; state.tf0 = 1; }
+        }
+    }
+
+    // --- Rendering Engine (Scaled for 1200x750) ---
+    
+    const COLORS = {
+        BG: '#000',
+        WIRE_OFF: '#555',
+        WIRE_ON: '#00ff00',
+        TEXT: '#fff',
+        BOX_BORDER: '#fff',
+        GATE_FILL: '#222',
+        GATE_STROKE: '#888'
+    };
+
+    // Adjusted Coordinates for 1200px Width
+    const pos = {
+        osc:      {x: 80, y: 150},
+        switchCT: {x: 250, y: 200},
+        pin:      {x: 80, y: 260},
+        
+        // Logic Section (moved right and down slightly)
+        int0Line: {y: 550},
+        gateLine: {y: 600},
+        logicOr:  {x: 250, y: 530}, // The OR logic box
+        logicAnd: {x: 500, y: 450}, // The AND gate
+        
+        switchRun: {x: 650, y: 200}, // The control switch
+        
+        // Registers (Right side)
+        tl0:      {x: 800, y: 160},
+        th0:      {x: 980, y: 160},
+        tf0:      {x: 1100, y: 450}
+    };
+
+    function drawWire(x1, y1, x2, y2, active) {
+        ctx.beginPath();
+        ctx.lineWidth = 6; // Bold lines
+        ctx.lineCap = "round";
+        ctx.strokeStyle = active ? COLORS.WIRE_ON : COLORS.WIRE_OFF;
+        
+        ctx.moveTo(x1, y1);
+        
+        const midX = x1 + (x2 - x1) / 2;
+        
+        // Simple auto-routing
+        if (Math.abs(y1 - y2) < 10) {
+            ctx.lineTo(x2, y2);
+        } else {
+            ctx.lineTo(midX, y1);
+            ctx.lineTo(midX, y2);
+            ctx.lineTo(x2, y2);
+        }
+        
+        // Neon Glow
+        if (active) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = COLORS.WIRE_ON;
+        } else {
+            ctx.shadowBlur = 0;
+        }
+        
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    }
+
+    function drawBox(x, y, w, h, label, val=null, highlight=false) {
+        ctx.fillStyle = '#111';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = highlight ? '#ffd700' : '#fff';
+        
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeRect(x, y, w, h);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = "bold 20px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(label, x + w/2, y + h/2 - 10);
+
+        if (val !== null) {
+            ctx.fillStyle = '#ffd700';
+            ctx.font = "bold 30px monospace";
+            ctx.fillText(val, x + w/2, y + h/2 + 25);
+        }
+    }
+
+    function drawLogicGate(type, x, y, active) {
+        ctx.fillStyle = '#222';
+        ctx.strokeStyle = active ? '#00ff00' : '#888';
+        ctx.lineWidth = 4;
+        
+        ctx.beginPath();
+        if (type === 'AND') {
+            ctx.moveTo(x, y);
+            ctx.lineTo(x + 40, y);
+            ctx.arc(x + 40, y + 40, 40, -Math.PI/2, Math.PI/2);
+            ctx.lineTo(x, y + 80);
+            ctx.closePath();
+        }
+        
+        if (active) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = "#00ff00";
+        }
+        ctx.fill();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = "bold 16px sans-serif";
+        ctx.fillText(type, x + 30, y + 45);
+    }
+
+    function drawSwitch(x, y, stateTop, label) {
+        // Switch Box
+        ctx.fillStyle = '#000';
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3;
+        ctx.fillRect(x, y, 60, 90);
+        ctx.strokeRect(x, y, 60, 90);
+        
+        // Label
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 16px sans-serif";
+        ctx.fillText(label, x + 30, y - 15);
+
+        // Arm
+        ctx.beginPath();
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 5;
+        ctx.moveTo(x + 60, y + 45); // Output point
+        if (!stateTop) {
+            ctx.lineTo(x + 10, y + 20); // Top input
+        } else {
+            ctx.lineTo(x + 10, y + 70); // Bottom input
+        }
+        ctx.stroke();
+        
+        // Output stub
+        ctx.beginPath();
+        ctx.strokeStyle = '#fff';
+        ctx.moveTo(x + 60, y + 45);
+        ctx.lineTo(x + 70, y + 45);
+        ctx.stroke();
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // --- 1. Signal Sources ---
+        // OSC
+        ctx.fillStyle = "#ff9100";
+        ctx.font = "bold 18px sans-serif";
+        ctx.fillText("内部时钟 / 12", pos.osc.x - 40, pos.osc.y + 5);
+        drawWire(pos.osc.x + 40, pos.osc.y, pos.switchCT.x, pos.switchCT.y + 20, state.c_t === 0);
+
+        // Pin T0
+        ctx.fillStyle = "#00e5ff";
+        ctx.fillText("引脚 T0 (P3.4)", pos.pin.x - 40, pos.pin.y + 5);
+        let pinActive = state.c_t === 1 && manualPulse;
+        drawWire(pos.pin.x + 40, pos.pin.y, pos.switchCT.x, pos.switchCT.y + 70, pinActive);
+
+        // C/T Switch
+        drawSwitch(pos.switchCT.x, pos.switchCT.y, state.c_t, "C/T");
+
+        // Wire from C/T to Run Control
+        let clkSignal = (state.c_t === 0) ? true : pinActive;
+        drawWire(pos.switchCT.x + 70, pos.switchCT.y + 45, pos.switchRun.x, pos.switchRun.y + 20, clkSignal);
+
+        // --- 2. Control Logic Area ---
+        
+        // INT0 Line
+        ctx.fillStyle = "#fff";
+        ctx.fillText("INT0", 80, pos.int0Line.y + 5);
+        drawWire(130, pos.int0Line.y, pos.logicOr.x, pos.int0Line.y, state.int0);
+        
+        // GATE Line
+        ctx.fillStyle = "#fff";
+        ctx.fillText("GATE", 80, pos.gateLine.y + 5);
+        drawWire(130, pos.gateLine.y, pos.logicOr.x, pos.gateLine.y, state.gate);
+
+        // OR Logic Block (Simplified Visual)
+        let gateLogic = (!state.gate) || state.int0;
+        let logicColor = gateLogic ? COLORS.WIRE_ON : COLORS.WIRE_OFF;
+        
+        ctx.strokeStyle = logicColor;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(pos.logicOr.x, pos.logicOr.y, 100, 90);
+        
+        ctx.fillStyle = "#ccc";
+        ctx.font = "14px monospace";
+        ctx.fillText("(!GATE)||INT0", pos.logicOr.x + 50, pos.logicOr.y + 45);
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 16px sans-serif";
+        ctx.fillText("门控逻辑", pos.logicOr.x + 50, pos.logicOr.y + 75);
+
+        // Wire GateLogic -> AND
+        drawWire(pos.logicOr.x + 100, pos.logicOr.y + 45, pos.logicAnd.x, pos.logicAnd.y + 60, gateLogic);
+
+        // TR0 Line
+        ctx.fillStyle = "#fff";
+        ctx.fillText("TR0", 380, pos.logicAnd.y + 10);
+        drawWire(420, pos.logicAnd.y + 10, pos.logicAnd.x, pos.logicAnd.y + 20, state.tr0);
+
+        // AND Gate
+        drawLogicGate("AND", pos.logicAnd.x, pos.logicAnd.y, state.isRunning);
+
+        // Control Line (Dotted) from AND to Run Switch
+        ctx.beginPath();
+        ctx.strokeStyle = state.isRunning ? COLORS.WIRE_ON : '#444';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 8]);
+        ctx.moveTo(pos.logicAnd.x + 40, pos.logicAnd.y); // Top of AND
+        ctx.lineTo(pos.logicAnd.x + 40, 350);
+        ctx.lineTo(pos.switchRun.x + 30, 350);
+        ctx.lineTo(pos.switchRun.x + 30, pos.switchRun.y + 90);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Run Switch
+        drawSwitch(pos.switchRun.x, pos.switchRun.y, !state.isRunning, "运行控制");
+
+        // Wire Run Switch -> TL0
+        let counterInput = state.isRunning && clkSignal;
+        drawWire(pos.switchRun.x + 70, pos.switchRun.y + 45, pos.tl0.x, pos.tl0.y + 50, counterInput);
+
+
+        // --- 3. Registers & Flags ---
+        
+        let tl0Hex = state.tl0.toString(16).toUpperCase().padStart(2,'0');
+        let th0Hex = state.th0.toString(16).toUpperCase().padStart(2,'0');
+
+        drawBox(pos.tl0.x, pos.tl0.y, 120, 100, "TL0", tl0Hex, true);
+        
+        // Cascade wire
+        if (state.mode !== 2) {
+            drawWire(pos.tl0.x + 120, pos.tl0.y + 50, pos.th0.x, pos.th0.y + 50, false);
+        }
+
+        drawBox(pos.th0.x, pos.th0.y, 120, 100, "TH0", th0Hex, true);
+
+        // Auto Reload Arrow (Mode 2)
+        if (state.mode === 2) {
+            ctx.beginPath();
+            ctx.strokeStyle = "#ff9100";
+            ctx.lineWidth = 5;
+            // Loop path
+            ctx.moveTo(pos.th0.x + 60, pos.th0.y + 100);
+            ctx.lineTo(pos.th0.x + 60, pos.th0.y + 130);
+            ctx.lineTo(pos.tl0.x + 60, pos.tl0.y + 130);
+            ctx.lineTo(pos.tl0.x + 60, pos.tl0.y + 100);
+            ctx.stroke();
+            
+            // Arrowhead
+            ctx.beginPath();
+            ctx.moveTo(pos.tl0.x + 50, pos.tl0.y + 110);
+            ctx.lineTo(pos.tl0.x + 60, pos.tl0.y + 100);
+            ctx.lineTo(pos.tl0.x + 70, pos.tl0.y + 110);
+            ctx.stroke();
+            
+            ctx.fillStyle = "#ff9100";
+            ctx.font = "bold 16px sans-serif";
+            ctx.fillText("自动重装载", (pos.tl0.x + pos.th0.x)/2 + 60, pos.tl0.y + 150);
+        }
+
+        // Overflow Wire
+        drawWire(pos.th0.x + 120, pos.th0.y + 50, pos.tf0.x + 50, pos.tf0.y, state.tf0);
+
+        // TF0 Flag Indicator (Large Bulb)
+        ctx.beginPath();
+        ctx.arc(pos.tf0.x + 50, pos.tf0.y + 30, 30, 0, Math.PI*2);
+        ctx.fillStyle = state.tf0 ? "#ff0000" : "#222";
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        if (state.tf0) {
+            ctx.shadowBlur = 40;
+            ctx.shadowColor = "red";
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 20px sans-serif";
+        ctx.fillText("TF0", pos.tf0.x + 50, pos.tf0.y + 80);
+        if (state.tf0) {
+            ctx.fillStyle = "#ff5252";
+            ctx.font = "bold 24px sans-serif";
+            ctx.fillText("中断申请!", pos.tf0.x + 50, pos.tf0.y + 110);
+        }
+    }
+
+    function loop() {
+        step();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    // Start
+    loop();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,328 @@
+<!-- START OF FILE 51_Stepper.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>51单片机 步进电机控制原理</title>
+    <style>
+        :root {
+            --bg-color: #263238;
+            --panel-bg: #37474f;
+            --text-color: #eceff1;
+            --coil-off: #546e7a;
+            --coil-on: #ffab00; /* Amber for active coil */
+            --magnet-n: #ff5252;
+            --magnet-s: #448aff;
+        }
+
+        body {
+            font-family: 'Segoe UI', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+        }
+
+        .sidebar {
+            width: 300px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+
+        h2 { color: var(--coil-on); margin-top: 0; }
+        
+        .control-group { background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; }
+        select, input[type=range] { width: 100%; padding: 8px; background: #263238; color: #fff; border: 1px solid #555; border-radius: 4px; }
+        
+        button {
+            width: 100%; padding: 12px; background: var(--coil-on); color: #000;
+            border: none; border-radius: 4px; font-weight: bold; cursor: pointer;
+            margin-top: 5px;
+        }
+        button:hover { opacity: 0.9; }
+        button.stop { background: #ff5252; color: #fff; }
+
+        .sequence-display {
+            display: flex; gap: 5px; justify-content: space-between;
+            font-family: monospace; font-size: 1.2rem;
+            background: #222; padding: 10px; border-radius: 4px;
+        }
+        .bit { width: 30px; text-align: center; border-radius: 2px; }
+        .bit.on { background: var(--coil-on); color: #000; }
+
+        .main-display {
+            flex: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        canvas { display: block; }
+        
+        .footer {
+            position: absolute; bottom: 0; left: 300px; right: 0;
+            background: rgba(0,0,0,0.8); padding: 15px; font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <h2>步进电机控制</h2>
+    <div>28BYJ-48 (5线4相)</div>
+
+    <div class="control-group">
+        <label>励磁模式 (Step Mode)</label>
+        <select id="mode-select">
+            <option value="4_single">单四拍 (A-B-C-D)</option>
+            <option value="4_double">双四拍 (AB-BC-CD-DA)</option>
+            <option value="8_half" selected>八拍 (A-AB-B-BC...)</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label>转速 (Delay: <span id="speed-display">50</span>ms)</label>
+        <input type="range" id="speed-slider" min="10" max="500" value="50">
+        <div style="font-size:0.8rem; color:#aaa; margin-top:5px;">值越小越快</div>
+    </div>
+
+    <div class="control-group">
+        <label>方向</label>
+        <select id="dir-select">
+            <option value="1">正转 (CW)</option>
+            <option value="-1">反转 (CCW)</option>
+        </select>
+    </div>
+
+    <div class="control-group">
+        <label>端口状态 (P1.0 - P1.3)</label>
+        <div class="sequence-display">
+            <div id="bit-a" class="bit">A</div>
+            <div id="bit-b" class="bit">B</div>
+            <div id="bit-c" class="bit">C</div>
+            <div id="bit-d" class="bit">D</div>
+        </div>
+    </div>
+
+    <button id="toggle-btn" onclick="toggleRun()">开始运行</button>
+</div>
+
+<div class="main-display" id="canvas-container">
+    <canvas id="motorCanvas"></canvas>
+    <div class="footer">
+        <strong>原理说明：</strong> 步进电机通过依次给定子线圈通电产生磁场，吸引转子（永磁体）转动。
+        单片机通过 ULN2003 驱动芯片控制 ABCD 四相的通断。
+        <strong>八拍模式</strong> 步距角最小（5.625°/64），控制最平滑。
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('motorCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Motor State
+    const coils = ['A', 'B', 'C', 'D']; // P1.0, P1.1, P1.2, P1.3
+    let coilState = [0, 0, 0, 0];
+    let rotorAngle = 0;
+    let targetAngle = 0;
+    let isRunning = false;
+    let stepIndex = 0;
+    let lastTime = 0;
+    let interval = 50; // ms
+    let direction = 1;
+
+    // Sequences
+    const sequences = {
+        '4_single': [[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,1]],
+        '4_double': [[1,1,0,0], [0,1,1,0], [0,0,1,1], [1,0,0,1]],
+        '8_half':   [[1,0,0,0], [1,1,0,0], [0,1,0,0], [0,1,1,0], [0,0,1,0], [0,0,1,1], [0,0,0,1], [1,0,0,1]]
+    };
+    let currentSeq = sequences['8_half'];
+
+    // UI
+    const modeSelect = document.getElementById('mode-select');
+    const speedSlider = document.getElementById('speed-slider');
+    const speedDisp = document.getElementById('speed-display');
+    const dirSelect = document.getElementById('dir-select');
+    const btn = document.getElementById('toggle-btn');
+    const bitEls = coils.map(c => document.getElementById(`bit-${c.toLowerCase()}`));
+
+    modeSelect.addEventListener('change', (e) => {
+        currentSeq = sequences[e.target.value];
+        stepIndex = 0;
+    });
+
+    speedSlider.addEventListener('input', (e) => {
+        interval = parseInt(e.target.value);
+        speedDisp.innerText = interval;
+    });
+
+    dirSelect.addEventListener('change', (e) => direction = parseInt(e.target.value));
+
+    function toggleRun() {
+        isRunning = !isRunning;
+        btn.innerText = isRunning ? "停止" : "开始运行";
+        btn.className = isRunning ? "stop" : "";
+    }
+
+    function resize() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Drawing Functions
+    function drawMotor() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const radius = 150;
+
+        // Draw Stator (Static)
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fillStyle = "#455a64";
+        ctx.fill();
+        ctx.stroke();
+
+        // Draw Coils
+        const coilPos = [
+            {x: cx, y: cy - 120, label: 'A (P1.0)'}, // Top
+            {x: cx + 120, y: cy, label: 'B (P1.1)'}, // Right
+            {x: cx, y: cy + 120, label: 'C (P1.2)'}, // Bottom
+            {x: cx - 120, y: cy, label: 'D (P1.3)'}  // Left
+        ];
+
+        coilPos.forEach((pos, i) => {
+            const isActive = coilState[i];
+            
+            // Coil glow
+            if (isActive) {
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = "#ffab00";
+            } else {
+                ctx.shadowBlur = 0;
+            }
+
+            ctx.fillStyle = isActive ? "#ffab00" : "#546e7a";
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 25, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Wire winding look
+            ctx.strokeStyle = "rgba(0,0,0,0.3)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 15, 0, Math.PI*2);
+            ctx.stroke();
+
+            // Reset shadow
+            ctx.shadowBlur = 0;
+
+            // Label
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 14px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText(pos.label, pos.x, pos.y + (i===0 ? -35 : 45));
+        });
+
+        // Draw Rotor (Rotating)
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rotorAngle);
+
+        // Magnet Body
+        ctx.beginPath();
+        ctx.arc(0, 0, 80, 0, Math.PI*2);
+        ctx.fillStyle = "#ddd";
+        ctx.fill();
+        ctx.strokeStyle = "#333";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // Poles
+        // N Pole (Top)
+        ctx.fillStyle = "#ff5252";
+        ctx.beginPath();
+        ctx.moveTo(-20, 0);
+        ctx.lineTo(20, 0);
+        ctx.lineTo(0, -70);
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.fillText("N", 0, -40);
+
+        // S Pole (Bottom)
+        ctx.fillStyle = "#448aff";
+        ctx.beginPath();
+        ctx.moveTo(-20, 0);
+        ctx.lineTo(20, 0);
+        ctx.lineTo(0, 70);
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.fillText("S", 0, 50);
+
+        // Center Pivot
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI*2);
+        ctx.fillStyle = "#000";
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    function loop(timestamp) {
+        if (!lastTime) lastTime = timestamp;
+        const delta = timestamp - lastTime;
+
+        if (isRunning && delta > interval) {
+            // Update Step
+            stepIndex += direction;
+            if (stepIndex >= currentSeq.length) stepIndex = 0;
+            if (stepIndex < 0) stepIndex = currentSeq.length - 1;
+
+            coilState = currentSeq[stepIndex];
+            
+            // Calculate target angle based on active coils
+            // This is a simplified visual representation.
+            // 8-step is 45 deg visual steps here (though real motor is geared)
+            
+            // Ideally, we move rotor towards the active coil(s) magnetic center
+            // Let's just step visual angle by discrete amount for simplicity
+            const visualStep = (Math.PI / 2) / (currentSeq.length / 4);
+            targetAngle += visualStep * direction;
+            
+            lastTime = timestamp;
+        }
+
+        // Smooth Rotor Animation
+        // Linear interpolation for smooth movement between electrical steps
+        const diff = targetAngle - rotorAngle;
+        rotorAngle += diff * 0.2;
+
+        // Update UI Bits
+        coilState.forEach((s, i) => {
+            if (s) bitEls[i].classList.add('on');
+            else bitEls[i].classList.remove('on');
+        });
+
+        drawMotor();
+        requestAnimationFrame(loop);
+    }
+
+    requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>

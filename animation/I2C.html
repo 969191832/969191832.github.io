@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>I2C 协议分析与演示 (修复版)</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --panel-bg: #252537;
+            --text-color: #cdd6f4;
+            --accent-color: #89b4fa;
+            --sda-color: #a6e3a1; /* Green */
+            --scl-color: #f9e2af; /* Yellow */
+            --grid-color: #45475a;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* 左侧控制栏 */
+        .sidebar {
+            width: 320px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        h2 { color: var(--accent-color); margin-top: 0; font-size: 1.5rem; }
+
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        input[type=range], input[type=text], select {
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #111;
+            color: #fff;
+        }
+        
+        input[type=range] { cursor: pointer; }
+
+        .btn-row { display: flex; gap: 10px; }
+        
+        button {
+            flex: 1;
+            background-color: var(--accent-color);
+            color: var(--bg-color);
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        button:active { transform: translateY(1px); }
+        
+        button.secondary { background-color: #45475a; color: #fff; }
+        button.paused { background-color: #f9e2af; color: #1e1e2e; animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .status-panel {
+            margin-top: auto;
+            padding: 10px;
+            background: #111;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            height: 150px; /* 固定高度防止跳动 */
+            overflow-y: auto;
+            border: 1px solid #333;
+        }
+        
+        .active-step { color: var(--accent-color); font-weight: bold; border-left: 3px solid var(--accent-color); padding-left: 5px; background: rgba(137, 180, 250, 0.1); }
+
+        /* 右侧演示区 */
+        .main-display {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: #181825;
+            padding-bottom: 10px;
+        }
+
+        .canvas-wrapper {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+
+        /* 进度条区域 */
+        .timeline-controls {
+            height: 50px;
+            background-color: var(--panel-bg);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 15px;
+            border-top: 1px solid var(--grid-color);
+        }
+        
+        .timeline-controls span { color: #aaa; font-size: 0.9rem; white-space: nowrap; }
+
+        input[type=range].timeline-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: #111;
+            border-radius: 5px;
+            outline: none;
+            border: 1px solid #444;
+        }
+        input[type=range].timeline-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+            margin-top: -6px; /* 居中 */
+        }
+        input[type=range].timeline-slider::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #333;
+            border-radius: 5px;
+        }
+
+        /* 悬浮图例 */
+        .legend {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+
+        /* 底部知识点 */
+        .footer-notes {
+            height: 160px;
+            background-color: var(--panel-bg);
+            border-top: 1px solid var(--grid-color);
+            padding: 15px 20px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            overflow-y: auto;
+        }
+
+        .note-card {
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid var(--accent-color);
+        }
+        .note-card h4 { margin: 0 0 8px 0; color: var(--accent-color); }
+        .note-card p { margin: 0; font-size: 0.85rem; color: #a6adc8; line-height: 1.4; }
+
+        @media (max-width: 900px) {
+            .container { flex-direction: column; }
+            .sidebar { width: auto; max-height: 300px; }
+            .footer-notes { grid-template-columns: 1fr 1fr; height: auto; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+        <h2>I2C 控制台</h2>
+
+        <div class="control-group">
+            <label>模拟速度</label>
+            <input type="range" id="speed-control" min="1" max="20" value="5">
+        </div>
+
+        <div class="control-group">
+            <label>从机地址 (Hex) <span id="addr-display">0x50</span></label>
+            <input type="range" id="address-input" min="1" max="127" value="80">
+            
+            <label style="margin-top:10px">读/写模式</label>
+            <select id="rw-mode">
+                <option value="0">写 (Write) - 0</option>
+                <option value="1">读 (Read) - 1</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label>数据内容 (Hex)</label>
+            <input type="text" id="data-input" value="AB" maxlength="2" style="text-transform:uppercase;">
+            
+            <label style="margin-top:10px">应答设置</label>
+            <select id="ack-mode">
+                <option value="ACK">正常应答 (ACK)</option>
+                <option value="NACK">无应答 (NACK)</option>
+            </select>
+        </div>
+
+        <div class="btn-row">
+            <button id="start-btn">发送数据</button>
+            <button id="pause-btn" class="secondary">暂停</button>
+        </div>
+        <div class="btn-row">
+             <button id="reset-btn" class="secondary" style="background-color: #f38ba8; color: #111;">重置系统</button>
+        </div>
+
+        <div class="status-panel" id="status-log">
+            <div>System Ready. Click "发送数据" to start.</div>
+        </div>
+    </aside>
+
+    <!-- 演示区域 -->
+    <main class="main-display">
+        <div class="legend">
+            <div class="legend-item"><span class="dot" style="background:var(--scl-color)"></span> SCL (时钟)</div>
+            <div class="legend-item"><span class="dot" style="background:var(--sda-color)"></span> SDA (数据)</div>
+        </div>
+        
+        <div class="canvas-wrapper">
+            <canvas id="i2cCanvas"></canvas>
+        </div>
+
+        <!-- 进度条区域 -->
+        <div class="timeline-controls">
+            <span>历史回放:</span>
+            <input type="range" id="history-slider" class="timeline-slider" value="0" min="0" max="100" disabled>
+            <span id="progress-text">0%</span>
+        </div>
+    </main>
+</div>
+
+<footer class="footer-notes">
+    <div class="note-card">
+        <h4>1. 时序分析 (Timing)</h4>
+        <p>拖动上方进度条可逐帧查看波形。注意观察：<strong>SDA 只有在 SCL 为低电平时才允许变化</strong>，否则会被视为 Start/Stop 信号。</p>
+    </div>
+    <div class="note-card">
+        <h4>2. 起始 (Start)</h4>
+        <p>总线空闲时（SCL=1, SDA=1），SDA 率先拉低。这是告诉所有从机“我要开始说话了”。</p>
+    </div>
+    <div class="note-card">
+        <h4>3. 应答 (ACK/NACK)</h4>
+        <p>第9个时钟周期。ACK(0) 表示“收到/继续”，NACK(1) 表示“没收到/结束”。由接收方控制 SDA。</p>
+    </div>
+    <div class="note-card">
+        <h4>4. 停止 (Stop)</h4>
+        <p>传输结束时，SCL 保持高电平，SDA 由低变高。总线恢复空闲状态。</p>
+    </div>
+</footer>
+
+<script>
+    // Canvas设置
+    const canvas = document.getElementById('i2cCanvas');
+    const ctx = canvas.getContext('2d');
+    const logPanel = document.getElementById('status-log');
+
+    // 配置对象
+    let config = {
+        speed: 5,
+        scaleX: 2, 
+        isRunning: false,
+        isPaused: false,
+        frame: 0,
+        timeline: [],
+        logs: []
+    };
+
+    // UI 元素
+    const ui = {
+        speed: document.getElementById('speed-control'),
+        addr: document.getElementById('address-input'),
+        addrDisplay: document.getElementById('addr-display'),
+        rw: document.getElementById('rw-mode'),
+        data: document.getElementById('data-input'),
+        ack: document.getElementById('ack-mode'),
+        startBtn: document.getElementById('start-btn'),
+        pauseBtn: document.getElementById('pause-btn'),
+        resetBtn: document.getElementById('reset-btn'),
+        slider: document.getElementById('history-slider'),
+        progressText: document.getElementById('progress-text')
+    };
+
+    // 监听器
+    ui.speed.addEventListener('input', (e) => config.speed = parseInt(e.target.value));
+    ui.addr.addEventListener('input', (e) => {
+        let hex = parseInt(e.target.value).toString(16).toUpperCase();
+        if(hex.length < 2) hex = "0" + hex;
+        ui.addrDisplay.innerText = "0x" + hex;
+    });
+    
+    ui.startBtn.addEventListener('click', () => {
+        generateWaveform();
+        startAnimation();
+    });
+
+    ui.resetBtn.addEventListener('click', reset);
+    ui.pauseBtn.addEventListener('click', togglePause);
+
+    // 进度条监听：拖动时暂停播放并更新画面
+    ui.slider.addEventListener('input', (e) => {
+        if(config.isRunning) {
+            pauseAnimation();
+        }
+        config.frame = parseInt(e.target.value);
+        updateProgressText();
+        draw(config.frame);
+    });
+
+    window.addEventListener('resize', resizeCanvas);
+
+    function resizeCanvas() {
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+        if(config.timeline.length > 0) {
+            draw(config.frame);
+        } else {
+            drawGrid();
+        }
+    }
+    resizeCanvas(); // init
+
+    // --- 状态控制 ---
+
+    function reset() {
+        config.isRunning = false;
+        config.isPaused = false;
+        config.frame = 0;
+        config.timeline = [];
+        
+        ui.slider.value = 0;
+        ui.slider.disabled = true;
+        ui.progressText.innerText = "0%";
+        
+        ui.pauseBtn.innerText = "暂停";
+        ui.pauseBtn.classList.remove("paused");
+
+        logPanel.innerHTML = '<div>System Reset. Ready.</div>';
+        ctx.clearRect(0,0,canvas.width, canvas.height);
+        drawGrid();
+    }
+
+    function startAnimation() {
+        // 如果已经结束了，且不在回放，则重置回0
+        if(config.frame >= config.timeline.length - 1) {
+            config.frame = 0;
+        }
+        config.isRunning = true;
+        config.isPaused = false;
+        ui.pauseBtn.innerText = "暂停";
+        ui.pauseBtn.classList.remove("paused");
+        ui.slider.disabled = false;
+        animate();
+    }
+
+    function pauseAnimation() {
+        config.isRunning = false;
+        config.isPaused = true;
+        ui.pauseBtn.innerText = "继续";
+        ui.pauseBtn.classList.add("paused");
+    }
+
+    function togglePause() {
+        if(config.timeline.length === 0) return;
+
+        if (config.isRunning) {
+            pauseAnimation();
+        } else {
+            startAnimation();
+        }
+    }
+
+    function log(msg, highlight=false) {
+        const div = document.createElement('div');
+        div.innerText = `> ${msg}`;
+        if(highlight) div.className = 'active-step';
+        logPanel.appendChild(div);
+        logPanel.scrollTop = logPanel.scrollHeight;
+    }
+
+    function updateProgressText() {
+        const total = config.timeline.length > 0 ? config.timeline.length - 1 : 1;
+        const pct = Math.round((config.frame / total) * 100);
+        ui.progressText.innerText = `${pct}%`;
+    }
+
+    // --- 数据生成 (核心协议逻辑) ---
+    
+    const STEPS_PER_BIT = 40; 
+    const HIGH = 0; 
+    const LOW = 1;
+
+    function addState(duration, sda, scl, label="", type="", logMsg=null) {
+        for(let i=0; i<duration; i++) {
+            config.timeline.push({ sda, scl, label, type, logMsg });
+        }
+    }
+
+    function addBitSequence(bitValue, label, logMsgBase) {
+        addState(STEPS_PER_BIT/4, bitValue, LOW, label, "setup");
+        addState(STEPS_PER_BIT/2, bitValue, HIGH, label, "sample", (logMsgBase ? `${logMsgBase}` : null));
+        addState(STEPS_PER_BIT/4, bitValue, LOW, label, "hold");
+    }
+
+    function generateWaveform() {
+        const addrVal = parseInt(ui.addr.value);
+        const rwVal = parseInt(ui.rw.value);
+        const dataHex = ui.data.value || "00";
+        const dataVal = parseInt(dataHex, 16);
+        const wantAck = ui.ack.value === "ACK";
+
+        config.timeline = [];
+        config.frame = 0;
+        logPanel.innerHTML = ''; 
+        // 初始化第一条日志，避免 draw 中报错
+        log("Generating Waveform...", false);
+
+        // 1. IDLE
+        addState(40, HIGH, HIGH, "IDLE", "", "Bus Idle");
+
+        // 2. START
+        addState(10, HIGH, HIGH, "START", "");
+        addState(15, LOW, HIGH, "START", "S", "Start Condition");
+        addState(15, LOW, LOW, "START", "");
+
+        // 3. ADDRESS
+        for(let i=6; i>=0; i--) {
+            const bit = (addrVal >> i) & 1 ? HIGH : LOW;
+            addBitSequence(bit, `Addr[${i}]`, `Sending Address Bit ${i}`);
+        }
+
+        // 4. R/W
+        const rwBit = rwVal ? HIGH : LOW;
+        const modeStr = rwVal ? "Read" : "Write";
+        addBitSequence(rwBit, "R/W", `Sending ${modeStr} Bit`);
+
+        // 5. ACK (Address)
+        addState(10, HIGH, LOW, "Release", "", "Waiting for Address ACK");
+        const ackBit = wantAck ? LOW : HIGH;
+        addBitSequence(ackBit, wantAck?"ACK":"NACK", `Address ${wantAck?"ACK":"NACK"}`);
+
+        // 6. DATA
+        for(let i=7; i>=0; i--) {
+            const bit = (dataVal >> i) & 1 ? HIGH : LOW;
+            addBitSequence(bit, `Data[${i}]`, `Sending Data Bit ${i}`);
+        }
+
+        // 7. ACK (Data)
+        addState(10, HIGH, LOW, "Release", "", "Waiting for Data ACK");
+        addBitSequence(ackBit, wantAck?"ACK":"NACK", `Data ${wantAck?"ACK":"NACK"}`);
+
+        // 8. STOP
+        addState(20, LOW, LOW, "STOP", "", "Preparing Stop");
+        addState(20, LOW, HIGH, "STOP", "", "Stop: SCL High"); 
+        addState(30, HIGH, HIGH, "STOP", "P", "Stop Condition");
+
+        ui.slider.max = config.timeline.length - 1;
+        ui.slider.value = 0;
+    }
+
+    // --- 动画循环 ---
+
+    function animate() {
+        if(!config.isRunning) return;
+
+        const stepSize = Math.ceil(config.speed / 2);
+        config.frame += stepSize;
+
+        if(config.frame >= config.timeline.length) {
+            config.frame = config.timeline.length - 1;
+            config.isRunning = false;
+            ui.pauseBtn.innerText = "重播";
+            ui.slider.value = config.frame;
+            updateProgressText();
+            draw(config.frame);
+            return;
+        }
+
+        ui.slider.value = config.frame;
+        updateProgressText();
+        draw(config.frame);
+        requestAnimationFrame(animate);
+    }
+
+    // --- 绘图 ---
+
+    function drawGrid() {
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.fillStyle = "#181825";
+        ctx.fillRect(0, 0, w, h);
+
+        const sclBase = h * 0.3;
+        const sdaBase = h * 0.7;
+
+        ctx.strokeStyle = "#333";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.moveTo(0, sclBase); ctx.lineTo(w, sclBase); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, sdaBase); ctx.lineTo(w, sdaBase); ctx.stroke();
+        ctx.setLineDash([]);
+    }
+
+    function draw(currentFrameIndex) {
+        drawGrid();
+        
+        const w = canvas.width;
+        const h = canvas.height;
+        const sclCenter = h * 0.3;
+        const sdaCenter = h * 0.7;
+        const amp = 30;
+        const unitWidth = 2 * config.scaleX; 
+        
+        // 视图跟随逻辑：始终保持波形头在屏幕右侧
+        let offsetX = 0;
+        const drawHeadX = currentFrameIndex * unitWidth;
+        // 当波形长度超过画布宽度的 80% 时开始滚动
+        if (drawHeadX > w * 0.8) {
+            offsetX = drawHeadX - (w * 0.8);
+        }
+
+        // 更新日志 (修复了之前的bug)
+        let activeLog = "Ready";
+        for(let i=currentFrameIndex; i>=0; i--) {
+            if(config.timeline[i] && config.timeline[i].logMsg) {
+                activeLog = config.timeline[i].logMsg;
+                break;
+            }
+        }
+        
+        const logText = `> ${activeLog}`;
+        // 安全检查：防止 logPanel 被清空后访问报错
+        if(logPanel.lastChild) {
+            if(logPanel.lastChild.innerText !== logText) {
+                log(activeLog, true);
+            }
+        } else {
+            log(activeLog, true);
+        }
+
+        function drawLine(type, color, centerY) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.lineJoin = "round";
+            
+            // 优化：只绘制可见区域
+            let startIndex = Math.floor((offsetX - 20) / unitWidth);
+            if(startIndex < 0) startIndex = 0;
+
+            for (let i = startIndex; i <= currentFrameIndex; i++) {
+                const pt = config.timeline[i];
+                if (!pt) continue;
+                const val = (type === 'scl') ? pt.scl : pt.sda; 
+                const y = centerY + (val === 0 ? -amp : amp); 
+                const x = i * unitWidth - offsetX;
+
+                if (i === startIndex) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        drawLine('scl', '#f9e2af', sclCenter);
+        drawLine('sda', '#a6e3a1', sdaCenter);
+
+        // 扫描线
+        const curX = currentFrameIndex * unitWidth - offsetX;
+        ctx.beginPath();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1;
+        ctx.moveTo(curX, 0);
+        ctx.lineTo(curX, h);
+        ctx.stroke();
+
+        // 绘制标签
+        ctx.font = "12px Arial";
+        ctx.textAlign = "center";
+        
+        let lastLabel = "";
+        let labelStartX = 0;
+        let startIndex = Math.floor((offsetX - 100) / unitWidth);
+        if(startIndex < 0) startIndex = 0;
+
+        for(let i = startIndex; i <= currentFrameIndex; i++) {
+            const pt = config.timeline[i];
+            if(!pt) continue;
+            const x = i * unitWidth - offsetX;
+
+            if(pt.type === 'S' || pt.type === 'P') {
+                 ctx.fillStyle = "#f38ba8";
+                 ctx.font = "bold 16px Arial";
+                 ctx.fillText(pt.type, x, sdaCenter - 45);
+            }
+
+            if(pt.label !== lastLabel) {
+                if(lastLabel !== "" && lastLabel !== "IDLE") {
+                     ctx.fillStyle = "#ccc";
+                     ctx.font = "10px sans-serif";
+                     // 计算上一个标签的中心位置
+                     const labelCenter = labelStartX + (x - labelStartX)/2;
+                     // 只有当标签在可见范围内时才绘制，避免文字重叠
+                     if(labelCenter > 0 && labelCenter < w) {
+                        ctx.fillText(lastLabel, labelCenter, sclCenter - 50);
+                     }
+                }
+                lastLabel = pt.label;
+                labelStartX = x;
+            }
+        }
+        
+        // 绘制正在进行的标签
+        if(lastLabel !== "" && lastLabel !== "IDLE") {
+            ctx.fillStyle = "#89b4fa";
+            ctx.font = "bold 12px sans-serif";
+            ctx.fillText(lastLabel, curX, sclCenter - 50);
+        }
+    }
+
+</script>
+</body>
+</html>

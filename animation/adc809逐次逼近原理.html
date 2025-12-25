@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADC0809 逐次逼近原理演示</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --panel-bg: #2d2d44;
+            --accent-color: #4cc9f0;
+            --highlight-color: #f72585;
+            --success-color: #4caf50;
+            --text-color: #e0e0e0;
+            --wire-color: #555;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: grid;
+            grid-template-rows: 1fr auto;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 主容器 */
+        .container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
+            padding: 20px;
+            height: calc(100% - 160px); /* 留出底部空间 */
+        }
+
+        /* 左侧控制面板 */
+        .controls {
+            background-color: var(--panel-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h2 { margin-top: 0; color: var(--accent-color); font-size: 1.5rem; }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label { font-size: 0.9rem; color: #aaa; }
+        
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+
+        .value-display {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            color: var(--highlight-color);
+            font-size: 1.1rem;
+        }
+
+        button {
+            background: linear-gradient(135deg, var(--accent-color), #3a86ff);
+            border: none;
+            padding: 12px;
+            color: white;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+
+        button:active { transform: scale(0.98); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .status-log {
+            margin-top: auto;
+            height: 150px;
+            background: #111;
+            border: 1px solid #444;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            overflow-y: auto;
+            color: #0f0;
+        }
+
+        /* 右侧演示区 */
+        .demo-stage {
+            background-color: var(--panel-bg);
+            border-radius: 12px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+        }
+
+        /* 电压对比柱状图 */
+        .voltage-meters {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            height: 200px;
+            margin-bottom: 20px;
+            align-items: flex-end;
+            border-bottom: 2px solid var(--wire-color);
+            padding-bottom: 10px;
+            position: relative;
+        }
+
+        .meter-box {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 80px;
+        }
+
+        .bar-container {
+            width: 40px;
+            height: 180px;
+            background: #111;
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #555;
+        }
+
+        .bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            transition: height 0.3s ease;
+        }
+
+        #bar-vin { background-color: var(--success-color); height: 0%; }
+        #bar-vdac { background-color: var(--highlight-color); height: 0%; }
+
+        .comparator-symbol {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 0; 
+            height: 0; 
+            border-left: 40px solid #888;
+            border-top: 20px solid transparent;
+            border-bottom: 20px solid transparent;
+        }
+        .comparator-symbol::after {
+            content: "CMP";
+            position: absolute;
+            left: -35px;
+            top: -6px;
+            font-size: 10px;
+            color: white;
+        }
+
+        /* SAR 寄存器位视图 */
+        .sar-register {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        .bit-box {
+            width: 50px;
+            height: 70px;
+            border: 2px solid var(--wire-color);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #222;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .bit-label { font-size: 0.8rem; color: #888; margin-bottom: 5px; }
+        .bit-val { font-size: 1.5rem; font-weight: bold; color: white; }
+
+        .bit-box.active {
+            border-color: var(--accent-color);
+            box-shadow: 0 0 15px var(--accent-color);
+            transform: translateY(-5px);
+        }
+
+        .bit-box.kept { border-color: var(--success-color); background: rgba(76, 175, 80, 0.1); }
+        .bit-box.dropped { border-color: var(--highlight-color); opacity: 0.6; }
+
+        /* 结果展示 */
+        .result-overlay {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 1.2rem;
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        /* 底部知识点 */
+        .knowledge-base {
+            background-color: #1a1a24;
+            padding: 20px;
+            border-top: 3px solid var(--accent-color);
+            height: 120px;
+            overflow-y: auto;
+        }
+
+        .knowledge-base h3 { margin: 0 0 10px 0; color: var(--accent-color); }
+        .knowledge-base ul {
+            margin: 0;
+            padding-left: 20px;
+            columns: 2;
+            font-size: 0.9rem;
+            color: #ccc;
+        }
+        .knowledge-base li { margin-bottom: 5px; }
+
+        /* 动画连线示意 (CSS SVG) */
+        .wire {
+            position: absolute;
+            background: var(--wire-color);
+            transition: background 0.2s;
+        }
+        .wire.hot { background: var(--highlight-color); box-shadow: 0 0 8px var(--highlight-color); }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- 左侧控制 -->
+        <div class="controls">
+            <h2>⚡ ADC0809 控制台</h2>
+            
+            <div class="control-group">
+                <label>输入电压 (Vin): <span id="disp-vin" class="value-display">2.50 V</span></label>
+                <input type="range" id="input-vin" min="0" max="5" step="0.01" value="2.50">
+            </div>
+
+            <div class="control-group">
+                <label>参考电压 (Vref): <span id="disp-vref" class="value-display">5.00 V</span></label>
+                <input type="range" id="input-vref" min="1" max="5" step="0.1" value="5.00">
+            </div>
+
+            <div class="control-group">
+                <label>演示速度 (ms/bit): <span id="disp-speed" class="value-display">800</span></label>
+                <input type="range" id="input-speed" min="100" max="2000" step="100" value="800">
+            </div>
+
+            <button id="btn-start" onclick="startConversion()">开始转换 (START)</button>
+            
+            <div class="status-log" id="status-log">
+                > 系统就绪...<br>
+                > 等待启动信号...
+            </div>
+        </div>
+
+        <!-- 右侧演示 -->
+        <div class="demo-stage">
+            <div style="text-align:center; margin-bottom:10px; color:#aaa;">ADC0809 内部逻辑视图</div>
+            
+            <!-- 电压对比区 -->
+            <div class="voltage-meters">
+                <div class="meter-box">
+                    <div class="bar-container"><div class="bar" id="bar-vin"></div></div>
+                    <span>Vin</span>
+                    <span id="val-vin-meter" style="font-size:0.8rem">2.50V</span>
+                </div>
+
+                <div class="comparator-symbol"></div>
+
+                <div class="meter-box">
+                    <div class="bar-container"><div class="bar" id="bar-vdac"></div></div>
+                    <span>Vdac</span>
+                    <span id="val-vdac-meter" style="font-size:0.8rem">0.00V</span>
+                </div>
+            </div>
+
+            <!-- SAR 寄存器 -->
+            <div class="sar-register" id="sar-container">
+                <!-- 由JS生成8个Bit位 -->
+            </div>
+
+            <div class="result-overlay">
+                <div>数字输出 (D7-D0): <span id="res-binary" style="color:var(--accent-color)">00000000</span></div>
+                <div>Hex: <span id="res-hex">0x00</span> | Decimal: <span id="res-dec">0</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部知识点 -->
+    <div class="knowledge-base">
+        <h3>📖 核心知识点：逐次逼近型 (SAR) ADC</h3>
+        <ul>
+            <li><strong>基本原理：</strong> 类似于用天平称重。从最高位(MSB)开始，依次假设每一位为1，比较生成的DAC电压与输入电压。</li>
+            <li><strong>分辨率：</strong> ADC0809为8位分辨率，即 $2^8 = 256$ 个量化等级。</li>
+            <li><strong>量化公式：</strong> $D_{out} = \frac{V_{in}}{V_{ref}} \times 255$ (取整)。</li>
+            <li><strong>转换时间：</strong> 取决于时钟频率，SAR逻辑需要N个时钟周期完成N位转换（ADC0809典型约为100μs）。</li>
+            <li><strong>主要引脚：</strong> START(启动), EOC(转换结束), OE(输出允许), CLK(时钟), ALE(地址锁存)。</li>
+            <li><strong>Vref影响：</strong> 参考电压决定了量化范围。若 $V_{ref}=5V$，则 $1 \text{ LSB} \approx 19.5mV$。</li>
+        </ul>
+    </div>
+
+    <script>
+        // 初始化 DOM 元素引用
+        const inputVin = document.getElementById('input-vin');
+        const inputVref = document.getElementById('input-vref');
+        const inputSpeed = document.getElementById('input-speed');
+        const dispVin = document.getElementById('disp-vin');
+        const dispVref = document.getElementById('disp-vref');
+        const dispSpeed = document.getElementById('disp-speed');
+        const barVin = document.getElementById('bar-vin');
+        const barVdac = document.getElementById('bar-vdac');
+        const sarContainer = document.getElementById('sar-container');
+        const logBox = document.getElementById('status-log');
+        const btnStart = document.getElementById('btn-start');
+        const valVinMeter = document.getElementById('val-vin-meter');
+        const valVdacMeter = document.getElementById('val-vdac-meter');
+
+        // 状态变量
+        let currentVin = 2.5;
+        let currentVref = 5.0;
+        let sarValue = 0; // 0-255
+        let isRunning = false;
+
+        // 初始化 8个Bit的UI
+        function initBits() {
+            sarContainer.innerHTML = '';
+            for (let i = 7; i >= 0; i--) {
+                const bitDiv = document.createElement('div');
+                bitDiv.className = 'bit-box';
+                bitDiv.id = `bit-${i}`;
+                bitDiv.innerHTML = `
+                    <span class="bit-label">D${i}</span>
+                    <span class="bit-val">0</span>
+                `;
+                sarContainer.appendChild(bitDiv);
+            }
+            updateCalculations(0);
+        }
+
+        // 更新输入显示
+        function updateInputs() {
+            if(isRunning) return; // 运行时锁定UI显示更新（实际上ADC有采样保持，这里简化）
+            currentVin = parseFloat(inputVin.value);
+            currentVref = parseFloat(inputVref.value);
+            
+            dispVin.textContent = currentVin.toFixed(2) + " V";
+            dispVref.textContent = currentVref.toFixed(2) + " V";
+            dispSpeed.textContent = inputSpeed.value;
+
+            // 更新 Vin 柱状图
+            const percent = Math.min((currentVin / currentVref) * 100, 100);
+            barVin.style.height = percent + "%";
+            valVinMeter.textContent = currentVin.toFixed(2) + "V";
+        }
+
+        // 事件监听
+        inputVin.addEventListener('input', updateInputs);
+        inputVref.addEventListener('input', updateInputs);
+        inputSpeed.addEventListener('input', updateInputs);
+
+        // 日志功能
+        function log(msg) {
+            logBox.innerHTML += `> ${msg}<br>`;
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        // 更新数字结果显示
+        function updateCalculations(val) {
+            const binaryStr = val.toString(2).padStart(8, '0');
+            document.getElementById('res-binary').textContent = binaryStr;
+            document.getElementById('res-hex').textContent = "0x" + val.toString(16).toUpperCase().padStart(2, '0');
+            document.getElementById('res-dec').textContent = val;
+        }
+
+        // 异步等待函数
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+        // 核心转换逻辑
+        async function startConversion() {
+            if (isRunning) return;
+            isRunning = true;
+            btnStart.disabled = true;
+            inputVin.disabled = true;
+            inputVref.disabled = true;
+
+            // 锁定采样电压 (Sample & Hold)
+            const sampleVin = parseFloat(inputVin.value);
+            const refV = parseFloat(inputVref.value);
+            const speed = parseInt(inputSpeed.value);
+
+            log("--- 开始转换 ---");
+            log(`采样 Vin: ${sampleVin.toFixed(2)}V`);
+            
+            // 重置SAR
+            sarValue = 0;
+            initBits(); // 重绘UI
+            updateCalculations(0);
+            barVdac.style.height = "0%";
+            valVdacMeter.textContent = "0.00V";
+
+            await sleep(speed / 2);
+
+            // 逐位逼近循环 (Bit 7 -> Bit 0)
+            for (let bit = 7; bit >= 0; bit--) {
+                const bitEl = document.getElementById(`bit-${bit}`);
+                const valEl = bitEl.querySelector('.bit-val');
+
+                // 1. 置位：假设当前位为 1
+                log(`[Step D${bit}] 尝试置 1...`);
+                bitEl.classList.add('active');
+                valEl.textContent = "1";
+                
+                // 计算当前的临时 Vdac
+                // 当前SAR值 = 已确定的高位 + 当前尝试位(1)
+                let tempSar = sarValue | (1 << bit);
+                let vDac = (tempSar / 255) * refV; // ADC0809 是256级，但在数学模型中最大值对应Vref通常处理为255或256，这里用255归一化
+                
+                // 更新 DAC UI
+                barVdac.style.height = Math.min((vDac / refV) * 100, 100) + "%";
+                valVdacMeter.textContent = vDac.toFixed(2) + "V";
+                updateCalculations(tempSar);
+
+                await sleep(speed);
+
+                // 2. 比较：Vin >= Vdac ?
+                if (sampleVin >= vDac) {
+                    // 够大，保留该位
+                    log(`Vin (${sampleVin.toFixed(2)}) >= Vdac (${vDac.toFixed(2)}) -> 保留 1`);
+                    sarValue = tempSar; // 更新确定值
+                    bitEl.classList.remove('active');
+                    bitEl.classList.add('kept');
+                } else {
+                    // 太大了，该位清零
+                    log(`Vin (${sampleVin.toFixed(2)}) < Vdac (${vDac.toFixed(2)}) -> 恢复 0`);
+                    valEl.textContent = "0";
+                    bitEl.classList.remove('active');
+                    bitEl.classList.add('dropped');
+                    
+                    // 恢复显示的Vdac电压到之前的状态 (为了视觉连贯性)
+                    let prevVdac = (sarValue / 255) * refV;
+                    barVdac.style.height = Math.min((prevVdac / refV) * 100, 100) + "%";
+                    valVdacMeter.textContent = prevVdac.toFixed(2) + "V";
+                    updateCalculations(sarValue);
+                }
+                
+                await sleep(speed / 2);
+            }
+
+            // 结束
+            log(`--- 转换结束 (EOC) ---`);
+            log(`最终结果: ${sarValue} (0x${sarValue.toString(16).toUpperCase()})`);
+            
+            isRunning = false;
+            btnStart.disabled = false;
+            inputVin.disabled = false;
+            inputVref.disabled = false;
+        }
+
+        // 页面加载初始化
+        initBits();
+        updateInputs();
+
+    </script>
+</body>
+</html>
