@@ -1,0 +1,266 @@
+<!DOCTYPE html><html lang="en" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>06 矩阵键盘识别实验 | Blog</title><meta name="author" content="zsl"><meta name="copyright" content="zsl"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="一、实验目的  理解独立按键和矩阵键盘的工作原理 掌握按键消抖的软件实现方法 掌握矩阵键盘逐行扫描的编程方法 综合运用数码管显示和键盘扫描完成交互系统设计   二、实验设备  windows操作系统 keil5 STC-ISP   三、实验内容 设计一个4×4矩阵键盘，键盘编号0~15，单片机能根据键盘排列顺序，将按下的键盘号正确识别出来，并采用两个数码管分别显示键盘号码的个位和十位。  四、实">
+<meta property="og:type" content="article">
+<meta property="og:title" content="06 矩阵键盘识别实验">
+<meta property="og:url" content="http://example.com/posts/48de462d/index.html">
+<meta property="og:site_name" content="Blog">
+<meta property="og:description" content="一、实验目的  理解独立按键和矩阵键盘的工作原理 掌握按键消抖的软件实现方法 掌握矩阵键盘逐行扫描的编程方法 综合运用数码管显示和键盘扫描完成交互系统设计   二、实验设备  windows操作系统 keil5 STC-ISP   三、实验内容 设计一个4×4矩阵键盘，键盘编号0~15，单片机能根据键盘排列顺序，将按下的键盘号正确识别出来，并采用两个数码管分别显示键盘号码的个位和十位。  四、实">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="http://example.com/img/butterfly-icon.png">
+<meta property="article:published_time" content="2026-04-27T16:00:00.000Z">
+<meta property="article:modified_time" content="2026-05-04T07:53:15.051Z">
+<meta property="article:author" content="zsl">
+<meta property="article:tag" content="矩阵键盘">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/img/butterfly-icon.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "06 矩阵键盘识别实验",
+  "url": "http://example.com/posts/48de462d/",
+  "image": "http://example.com/img/butterfly-icon.png",
+  "datePublished": "2026-04-27T16:00:00.000Z",
+  "dateModified": "2026-05-04T07:53:15.051Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "zsl",
+      "url": "http://example.com"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/butterfly-icon.png"><link rel="canonical" href="http://example.com/posts/48de462d/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.5.3"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: 'Copy Successful',
+    error: 'Copy Failed',
+    noSupport: 'Browser Not Supported'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: 'Just now',
+    min: 'minutes ago',
+    hour: 'hours ago',
+    day: 'days ago',
+    month: 'months ago'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.12.0/dist/infinitegrid.min.js',
+    buttonText: 'Load More'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '06 矩阵键盘识别实验',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div class="post" id="body-wrap"><header class="not-top-img" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Blog</span></a><a class="nav-page-title" href="/"><span class="site-name">06 矩阵键盘识别实验</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  Back to Home</span></span></a></span><div id="menus"></div></nav></header><main class="layout" id="content-inner"><div id="post"><div id="post-info"><h1 class="post-title">06 矩阵键盘识别实验</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">Created</span><time class="post-meta-date-created" datetime="2026-04-27T16:00:00.000Z" title="Created 2026-04-28 00:00:00">2026-04-28</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">Updated</span><time class="post-meta-date-updated" datetime="2026-05-04T07:53:15.051Z" title="Updated 2026-05-04 15:53:15">2026-05-04</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%8D%95%E7%89%87%E6%9C%BA%E5%AE%9E%E9%AA%8C/">单片机实验</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">Post Views:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div><article class="container post-content" id="article-container"><h2 id="一-实验目的"><a class="markdownIt-Anchor" href="#一-实验目的"></a> 一、实验目的</h2>
+<ul>
+<li>理解独立按键和矩阵键盘的工作原理</li>
+<li>掌握按键消抖的软件实现方法</li>
+<li>掌握矩阵键盘逐行扫描的编程方法</li>
+<li>综合运用数码管显示和键盘扫描完成交互系统设计</li>
+</ul>
+<h2 id="二-实验设备"><a class="markdownIt-Anchor" href="#二-实验设备"></a> 二、实验设备</h2>
+<ul>
+<li>windows操作系统</li>
+<li>keil5</li>
+<li>STC-ISP</li>
+</ul>
+<h2 id="三-实验内容"><a class="markdownIt-Anchor" href="#三-实验内容"></a> 三、实验内容</h2>
+<p>设计一个4×4矩阵键盘，键盘编号0~15，单片机能根据键盘排列顺序，将按下的键盘号正确识别出来，并采用两个数码管分别显示键盘号码的个位和十位。</p>
+<h2 id="四-实验原理"><a class="markdownIt-Anchor" href="#四-实验原理"></a> 四、实验原理</h2>
+<img src="/posts/48de462d/Pasted%20image%2020260126134028.png" class="">
+<p><strong>独立按键原理</strong>：按键一端接单片机IO口，另一端接地。按键未按下时IO口为高电平（内部上拉），按下后IO口被拉低为低电平。通过检测IO口电平变化即可判断按键状态。</p>
+<p><strong>矩阵键盘原理</strong>：4×4矩阵键盘由4根行线和4根列线交叉组成，共16个按键位于交叉点上。通过&quot;逐行扫描法&quot;识别按键：先将某一行拉低，其余行拉高，然后读取列线状态——如果某列也为低电平，说明该行列交叉处的按键被按下。</p>
+<p><strong>按键消抖</strong>：机械按键在按下和释放的瞬间会产生10<sub>20ms的抖动，可能导致一次按键被误识别为多次。解决方法是在检测到电平变化后延时10</sub>20ms再次确认。</p>
+<p><strong>蓝桥杯开发板引脚说明</strong>：</p>
+<ul>
+<li>行线（输出）：P3.0(R1)、P3.1(R2)、P3.2(R3)、P3.3(R4)</li>
+<li>列线（输入）：P3.4(C1)、P3.5(C2)、P4.2(C3)、P4.4(C4)</li>
+</ul>
+<blockquote>
+<p><strong>注意</strong>：C3和C4分别连接P4.2和P4.4，不属于P3口，需要通过P4寄存器单独读取。</p>
+</blockquote>
+<h3 id="独立按键检测示例代码"><a class="markdownIt-Anchor" href="#独立按键检测示例代码"></a> 独立按键检测–示例代码</h3>
+<p>用P3.0连接一个按键，按下后点亮LED灯。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">#include &lt;STC15F2K60S2.H&gt;</span><br><span class="line">#include &lt;intrins.h&gt;</span><br><span class="line"></span><br><span class="line">sbit KEY = P3^0;  // 按键接P3.0</span><br><span class="line"></span><br><span class="line">// 毫秒延时函数 @12.000MHz</span><br><span class="line">void Delayms(unsigned int ms) &#123;</span><br><span class="line">    unsigned char i, j;</span><br><span class="line">    while(ms--) &#123;</span><br><span class="line">        _nop_(); i = 12; j = 169;</span><br><span class="line">        do &#123; while (--j); &#125; while (--i);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">void main() &#123;</span><br><span class="line">    // 关闭蜂鸣器（Y5通道）</span><br><span class="line">    P2 = (P2 &amp; 0x1F) | 0xA0; P0 = 0x00; P2 &amp;= 0x1F;</span><br><span class="line">    // 使能LED锁存器（Y4通道）</span><br><span class="line">    P2 = (P2 &amp; 0x1F) | 0x80;</span><br><span class="line"></span><br><span class="line">    while(1) &#123;</span><br><span class="line">        if(KEY == 0) &#123;          // 第一次检测：按键是否按下（低电平有效）</span><br><span class="line">            Delayms(10);        // 延时10ms消抖</span><br><span class="line">            if(KEY == 0) &#123;      // 第二次检测：确认确实按下，非抖动</span><br><span class="line">                P0 = 0xFE;      // 点亮第一个LED（最低位为0）</span><br><span class="line">                while(KEY == 0); // 等待按键释放，防止重复触发</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="矩阵键盘扫描仅识别不显示示例代码"><a class="markdownIt-Anchor" href="#矩阵键盘扫描仅识别不显示示例代码"></a> 矩阵键盘扫描（仅识别，不显示）–示例代码</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><span class="line">#include &lt;STC15F2K60S2.H&gt;</span><br><span class="line">#include &lt;intrins.h&gt;</span><br><span class="line"></span><br><span class="line">// 行线定义（输出，逐行拉低扫描）</span><br><span class="line">sbit R1 = P3^0; sbit R2 = P3^1;</span><br><span class="line">sbit R3 = P3^2; sbit R4 = P3^3;</span><br><span class="line">// 列线定义（输入，检测哪一列被拉低）</span><br><span class="line">sbit C1 = P3^4; sbit C2 = P3^5;</span><br><span class="line"></span><br><span class="line">unsigned char keyVal = 0xFF;  // 当前键值，0xFF表示无按键按下</span><br><span class="line"></span><br><span class="line">// 毫秒延时函数 @12.000MHz</span><br><span class="line">void Delayms(unsigned int ms) &#123;</span><br><span class="line">    unsigned char i, j;</span><br><span class="line">    while(ms--) &#123;</span><br><span class="line">        _nop_(); i = 12; j = 169;</span><br><span class="line">        do &#123; while (--j); &#125; while (--i);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">// 矩阵键盘扫描函数：逐行拉低，检测列线状态</span><br><span class="line">// 返回值：键号0~15，0xFF表示无按键</span><br><span class="line">unsigned char Key_Scan() &#123;</span><br><span class="line">    unsigned char key = 0xFF;</span><br><span class="line"></span><br><span class="line">    // ---- 扫描第1行：R1拉低，其余行拉高 ----</span><br><span class="line">    R1=0; R2=1; R3=1; R4=1;</span><br><span class="line">    if(!C1) key=1; else if(!C2) key=2;         // C1、C2通过sbit直接读取</span><br><span class="line">    else if(!(P4 &amp; 0x04)) key=3;               // C3 = P4.2，通过位操作读取</span><br><span class="line">    else if(!(P4 &amp; 0x10)) key=10;              // C4 = P4.4，通过位操作读取</span><br><span class="line"></span><br><span class="line">    // ---- 扫描第2行 ----</span><br><span class="line">    R1=1; R2=0; R3=1; R4=1;</span><br><span class="line">    if(!C1) key=4; else if(!C2) key=5;</span><br><span class="line">    else if(!(P4 &amp; 0x04)) key=6;</span><br><span class="line">    else if(!(P4 &amp; 0x10)) key=11;</span><br><span class="line"></span><br><span class="line">    // ---- 扫描第3行 ----</span><br><span class="line">    R1=1; R2=1; R3=0; R4=1;</span><br><span class="line">    if(!C1) key=7; else if(!C2) key=8;</span><br><span class="line">    else if(!(P4 &amp; 0x04)) key=9;</span><br><span class="line">    else if(!(P4 &amp; 0x10)) key=12;</span><br><span class="line"></span><br><span class="line">    // ---- 扫描第4行 ----</span><br><span class="line">    R1=1; R2=1; R3=1; R4=0;</span><br><span class="line">    if(!C1) key=0; else if(!C2) key=15;</span><br><span class="line">    else if(!(P4 &amp; 0x04)) key=13;</span><br><span class="line">    else if(!(P4 &amp; 0x10)) key=14;</span><br><span class="line"></span><br><span class="line">    return key;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">void main() &#123;</span><br><span class="line">    while(1) &#123;</span><br><span class="line">        keyVal = Key_Scan();       // 扫描键盘</span><br><span class="line">        if(keyVal != 0xFF) &#123;       // 检测到有按键按下</span><br><span class="line">            Delayms(10);           // 延时10ms消抖</span><br><span class="line">            if(Key_Scan() == keyVal) &#123;  // 再次扫描确认键值一致</span><br><span class="line">                while(Key_Scan() != 0xFF);  // 等待按键释放</span><br><span class="line">                // 此处可根据keyVal执行对应操作</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><strong>矩阵键盘键值分布：</strong></p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>C1(P3.4)</th>
+<th>C2(P3.5)</th>
+<th>C3(P4.2)</th>
+<th>C4(P4.4)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R1(P3.0)</td>
+<td>1</td>
+<td>2</td>
+<td>3</td>
+<td>10</td>
+</tr>
+<tr>
+<td>R2(P3.1)</td>
+<td>4</td>
+<td>5</td>
+<td>6</td>
+<td>11</td>
+</tr>
+<tr>
+<td>R3(P3.2)</td>
+<td>7</td>
+<td>8</td>
+<td>9</td>
+<td>12</td>
+</tr>
+<tr>
+<td>R4(P3.3)</td>
+<td>0</td>
+<td>15</td>
+<td>13</td>
+<td>14</td>
+</tr>
+</tbody>
+</table>
+<h3 id="矩阵键盘数码管显示软件延时扫描示例代码"><a class="markdownIt-Anchor" href="#矩阵键盘数码管显示软件延时扫描示例代码"></a> 矩阵键盘+数码管显示（软件延时扫描）–示例代码</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br></pre></td><td class="code"><pre><span class="line">#include &lt;STC15F2K60S2.H&gt;</span><br><span class="line">#include &lt;intrins.h&gt;</span><br><span class="line"></span><br><span class="line">// 锁存器控制宏：选通对应通道后立即释放，防止总线冲突</span><br><span class="line">#define SELECT_BIT(x) &#123; P0 = x; P2 = (P2 &amp; 0x1F) | 0xC0; P2 &amp;= 0x1F; &#125;  // 数码管位选 Y6</span><br><span class="line">#define SELECT_SEG(x) &#123; P0 = x; P2 = (P2 &amp; 0x1F) | 0xE0; P2 &amp;= 0x1F; &#125;  // 数码管段选 Y7</span><br><span class="line">#define BUZ(x)        &#123; P0 = x; P2 = (P2 &amp; 0x1F) | 0xA0; P2 &amp;= 0x1F; &#125;  // 蜂鸣器 Y5</span><br><span class="line"></span><br><span class="line">// 共阳极数码管段码表：0~F，最后0xFF为熄灭</span><br><span class="line">unsigned char code SEG_CODE[] = &#123;</span><br><span class="line">    0xC0, 0xF9, 0xA4, 0xB0, 0x99, 0x92, 0x82, 0xF8,</span><br><span class="line">    0x80, 0x90, 0x88, 0x83, 0xC6, 0xA1, 0x86, 0x8E, 0xFF</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">unsigned char dBuf[2] = &#123;16, 16&#125;;  // 显示缓冲区，16对应段码表中的0xFF（熄灭）</span><br><span class="line"></span><br><span class="line">// 行线和列线定义</span><br><span class="line">sbit R1 = P3^0; sbit R2 = P3^1;</span><br><span class="line">sbit R3 = P3^2; sbit R4 = P3^3;</span><br><span class="line">sbit C1 = P3^4; sbit C2 = P3^5;</span><br><span class="line"></span><br><span class="line">// 毫秒延时函数 @12.000MHz</span><br><span class="line">void Delayms(unsigned int ms) &#123;</span><br><span class="line">    unsigned char i, j;</span><br><span class="line">    while(ms--) &#123;</span><br><span class="line">        _nop_(); i = 12; j = 169;</span><br><span class="line">        do &#123; while (--j); &#125; while (--i);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">// 数码管动态显示函数：两位数码管轮流点亮</span><br><span class="line">void Display() &#123;</span><br><span class="line">    // ---- 第1位（个位） ----</span><br><span class="line">    P0 = 0xFF; SELECT_SEG(0xFF);    // 先消隐，防止重影</span><br><span class="line">    SELECT_BIT(0x01);               // 选中第1位数码管</span><br><span class="line">    SELECT_SEG(SEG_CODE[dBuf[0]]);  // 送段码</span><br><span class="line">    Delayms(2);                     // 保持2ms</span><br><span class="line"></span><br><span class="line">    // ---- 第2位（十位） ----</span><br><span class="line">    P0 = 0xFF; SELECT_SEG(0xFF);    // 消隐</span><br><span class="line">    SELECT_BIT(0x02);               // 选中第2位数码管</span><br><span class="line">    SELECT_SEG(SEG_CODE[dBuf[1]]);  // 送段码</span><br><span class="line">    Delayms(2);                     // 保持2ms</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">// 矩阵键盘扫描函数：逐行拉低，检测列线</span><br><span class="line">unsigned char Key_Scan() &#123;</span><br><span class="line">    unsigned char key = 0xFF;</span><br><span class="line"></span><br><span class="line">    // 扫描第1行</span><br><span class="line">    R1=0; R2=1; R3=1; R4=1;</span><br><span class="line">    if(!C1) key=1; else if(!C2) key=2;</span><br><span class="line">    else if(!(P4 &amp; 0x04)) key=3;    // P4.2(C3)</span><br><span class="line">    else if(!(P4 &amp; 0x10)) key=10;   // P4.4(C4)</span><br><span class="line"></span><br><span class="line">    // 扫描第2行</span><br><span class="line">    R1=1; R2=0; R3=1; R4=1;</span><br><span class="line">    if(!C1) key=4; else if(!C2) key=5;</span><br><span class="line">    else if(!(P4 &amp; 0x04)) key=6;</span><br><span class="line">    else if(!(P4 &amp; 0x10)) key=11;</span><br><span class="line"></span><br><span class="line">    // 扫描第3行</span><br><span class="line">    R1=1; R2=1; R3=0; R4=1;</span><br><span class="line">    if(!C1) key=7; else if(!C2) key=8;</span><br><span class="line">    else if(!(P4 &amp; 0x04)) key=9;</span><br><span class="line">    else if(!(P4 &amp; 0x10)) key=12;</span><br><span class="line"></span><br><span class="line">    // 扫描第4行</span><br><span class="line">    R1=1; R2=1; R3=1; R4=0;</span><br><span class="line">    if(!C1) key=0; else if(!C2) key=15;</span><br><span class="line">    else if(!(P4 &amp; 0x04)) key=13;</span><br><span class="line">    else if(!(P4 &amp; 0x10)) key=14;</span><br><span class="line"></span><br><span class="line">    return key;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">void main() &#123;</span><br><span class="line">    unsigned char kNow, kOld = 0xFF;</span><br><span class="line"></span><br><span class="line">    P4M1 &amp;= ~0x14; P4M0 &amp;= ~0x14;  // 配置P4.2和P4.4为准双向口模式</span><br><span class="line">    BUZ(0x00);                      // 关闭蜂鸣器</span><br><span class="line"></span><br><span class="line">    while(1) &#123;</span><br><span class="line">        Display();                  // 每次循环先刷新数码管显示</span><br><span class="line"></span><br><span class="line">        kNow = Key_Scan();          // 扫描键盘</span><br><span class="line">        if(kNow != kOld) &#123;          // 键值发生变化</span><br><span class="line">            Delayms(10);            // 延时10ms消抖</span><br><span class="line">            if(kNow == Key_Scan()) &#123; // 再次确认键值</span><br><span class="line">                if(kNow != 0xFF) &#123;  // 有效按键（非释放状态）</span><br><span class="line">                    if(kNow &lt; 10) &#123;         // 个位数：只显示在第一位</span><br><span class="line">                        dBuf[0] = kNow;</span><br><span class="line">                        dBuf[1] = 16;       // 第二位熄灭</span><br><span class="line">                    &#125; else &#123;                // 两位数：拆分为十位和个位</span><br><span class="line">                        dBuf[0] = kNow / 10;</span><br><span class="line">                        dBuf[1] = kNow % 10;</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            kOld = kNow;            // 更新上一次键值</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="五-实验步骤"><a class="markdownIt-Anchor" href="#五-实验步骤"></a> 五、实验步骤</h2>
+<ul>
+<li>按照电路原理，在keil中编写程序</li>
+<li>将编好的程序下载到单片机</li>
+<li>逐个按下矩阵键盘的16个按键，观察数码管是否正确显示对应编号</li>
+<li>根据实验现象调试程序</li>
+</ul>
+<h2 id="六-思考和挑战"><a class="markdownIt-Anchor" href="#六-思考和挑战"></a> 六、思考和挑战</h2>
+<ol>
+<li>为什么矩阵键盘扫描时需要&quot;逐行拉低&quot;？如果同时拉低多行会怎样？</li>
+<li>如果要求按键按下时LED灯也跟着闪烁提示，程序应如何修改？</li>
+<li>挑战内容（选做）：使用定时器中断完成数码管动态扫描，主循环只负责键盘检测，实现真正的&quot;扫描与显示分离&quot;。</li>
+</ol>
+</article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E7%9F%A9%E9%98%B5%E9%94%AE%E7%9B%98/">矩阵键盘</a></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/posts/da7d789d/" title="07 DS18B20采集温度实验"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info"><div class="info-1"><div class="info-item-1">Previous</div><div class="info-item-2">07 DS18B20采集温度实验</div></div><div class="info-2"><div class="info-item-1"> 一、实验目的  理解单总线（OneWire）通信协议的工作原理 掌握DS18B20温度传感器的编程方法 综合运用数码管显示和温度采集完成完整的数据采集系统   二、实验设备  windows操作系统 keil5 STC-ISP   三、实验内容 通过DS18B20获取温度数据，并将采集到的温度通过数码管显示。温度只显示两位整数，数码管显示模式：   四、实验原理    DS18B20简介：DS18B20是达拉斯半导体公司生产的数字温度传感器，测温范围-55℃~+125℃，默认精度0.5℃。它通过**单总线（OneWire）**协议与单片机通信——只需要一根数据线（DQ）即可完成数据双向传输。 单总线通信原理：单总线是一种半双工通信协议，同一时刻只能有一方发送数据。通信过程由主机（单片机）发起，每次通信都遵循&quot;初始化→发送ROM命令→发送功能命令→读写数据&quot;的流程。DS18B20通过严格的时间窗口（微秒级）来区分0和1。 DS18B20关键命令：    命令代码 名称 功能     0xCC Skip ROM 跳过ROM匹配，直接与总线上唯一的DS18B20通...</div></div></div></a><a class="pagination-related" href="/posts/63bdb9a2/" title="05 LCD显示实验"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">Next</div><div class="info-item-2">05 LCD显示实验</div></div><div class="info-2"><div class="info-item-1"> 一、实验目的  了解LCD1602液晶显示的基本原理 掌握LCD1602的接口电路与控制时序 掌握LCD1602显示字符和字符串的编程方法   二、实验设备  windows操作系统 keil5 STC-ISP   三、实验内容 液晶LCD1602第一行居中显示自己的学号，第二行右对齐显示自己姓名  四、实验原理 LCD1602简介：LCD1602是一种点阵型液晶模块，可显示2行字符信息，每行16个字符。每个字符由5×7或5×10的点阵组成，字符间和行间有间隔，起到字符间距和行间距的作用。 LCD1602引脚功能：    引脚 名称 功能说明     1 VSS 电源地 (GND)   2 VDD 电源正极 (+5V)   3 V0 对比度调节（接电位器中间脚）   4 RS 寄存器选择：0=指令寄存器，1=数据寄存器   5 R/W 读写选择：0=写操作，1=读操作   6 E 使能信号，下降沿触发执行   7-14 D0-D7 8位数据总线   15 A 背光正极 (+5V)   16 K 背光负极 (GND)    蓝桥杯CT107D开发板LCD接线：    LCD引脚 ...</div></div></div></a></nav></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/butterfly-icon.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">zsl</div><div class="author-info-description"></div><div class="site-data"><a href="/archives/"><div class="headline">Articles</div><div class="length-num">26</div></a><a href="/tags/"><div class="headline">Tags</div><div class="length-num">40</div></a><a href="/categories/"><div class="headline">Categories</div><div class="length-num">5</div></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>Announcement</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>Contents</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80-%E5%AE%9E%E9%AA%8C%E7%9B%AE%E7%9A%84"><span class="toc-number">1.</span> <span class="toc-text"> 一、实验目的</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C-%E5%AE%9E%E9%AA%8C%E8%AE%BE%E5%A4%87"><span class="toc-number">2.</span> <span class="toc-text"> 二、实验设备</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89-%E5%AE%9E%E9%AA%8C%E5%86%85%E5%AE%B9"><span class="toc-number">3.</span> <span class="toc-text"> 三、实验内容</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B-%E5%AE%9E%E9%AA%8C%E5%8E%9F%E7%90%86"><span class="toc-number">4.</span> <span class="toc-text"> 四、实验原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%8B%AC%E7%AB%8B%E6%8C%89%E9%94%AE%E6%A3%80%E6%B5%8B%E7%A4%BA%E4%BE%8B%E4%BB%A3%E7%A0%81"><span class="toc-number">4.1.</span> <span class="toc-text"> 独立按键检测–示例代码</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9F%A9%E9%98%B5%E9%94%AE%E7%9B%98%E6%89%AB%E6%8F%8F%E4%BB%85%E8%AF%86%E5%88%AB%E4%B8%8D%E6%98%BE%E7%A4%BA%E7%A4%BA%E4%BE%8B%E4%BB%A3%E7%A0%81"><span class="toc-number">4.2.</span> <span class="toc-text"> 矩阵键盘扫描（仅识别，不显示）–示例代码</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%9F%A9%E9%98%B5%E9%94%AE%E7%9B%98%E6%95%B0%E7%A0%81%E7%AE%A1%E6%98%BE%E7%A4%BA%E8%BD%AF%E4%BB%B6%E5%BB%B6%E6%97%B6%E6%89%AB%E6%8F%8F%E7%A4%BA%E4%BE%8B%E4%BB%A3%E7%A0%81"><span class="toc-number">4.3.</span> <span class="toc-text"> 矩阵键盘+数码管显示（软件延时扫描）–示例代码</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94-%E5%AE%9E%E9%AA%8C%E6%AD%A5%E9%AA%A4"><span class="toc-number">5.</span> <span class="toc-text"> 五、实验步骤</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD-%E6%80%9D%E8%80%83%E5%92%8C%E6%8C%91%E6%88%98"><span class="toc-number">6.</span> <span class="toc-text"> 六、思考和挑战</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>Recent Posts</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/posts/1d13eaf8/" title="Keil C51 开发环境安装指南">Keil C51 开发环境安装指南</a><time datetime="2026-04-27T16:00:00.000Z" title="Created 2026-04-28 00:00:00">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/posts/8fe31ce0/" title="01 流水灯实验">01 流水灯实验</a><time datetime="2026-04-27T16:00:00.000Z" title="Created 2026-04-28 00:00:00">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/posts/b8af754d/" title="02 外部中断控制实验">02 外部中断控制实验</a><time datetime="2026-04-27T16:00:00.000Z" title="Created 2026-04-28 00:00:00">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/posts/dfbb8e59/" title="03 定时器实验">03 定时器实验</a><time datetime="2026-04-27T16:00:00.000Z" title="Created 2026-04-28 00:00:00">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/posts/63bdb9a2/" title="05 LCD显示实验">05 LCD显示实验</a><time datetime="2026-04-27T16:00:00.000Z" title="Created 2026-04-28 00:00:00">2026-04-28</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By zsl</span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="Reading Mode"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="Toggle Between Light and Dark Mode"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="Toggle Between Single-column and Double-column"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="Settings"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="Table of Contents"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="Back to Top"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.3"></script><script src="/js/main.js?v=5.5.3"></script><div class="js-pjax"><script>(async () => {
+  const showKatex = () => {
+    document.querySelectorAll('#article-container .katex').forEach(el => el.classList.add('katex-show'))
+  }
+
+  if (!window.katex_js_css) {
+    window.katex_js_css = true
+    await btf.getCSS('https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css')
+    if (false) {
+      await btf.getScript('https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/contrib/copy-tex.min.js')
+    }
+  }
+
+  showKatex()
+})()</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
