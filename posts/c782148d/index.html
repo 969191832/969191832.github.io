@@ -1,0 +1,692 @@
+<!DOCTYPE html><html lang="en" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>VSCode + PlatformIO 开发单片机指南 | Blog</title><meta name="author" content="zsl"><meta name="copyright" content="zsl"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="适用芯片： STC15F2K60S2（蓝桥杯 CT107D 开发板） 替代方案： 完全替代 Keil C51 + STC-ISP 的开发流程 前置知识： 了解基本的 C 语言和单片机概念    一、为什么选择 VSCode + PlatformIO    对比项 Keil C51 VSCode + PlatformIO     价格 需要破解激活 完全免费开源   编辑器 功能简陋，代码提示弱">
+<meta property="og:type" content="article">
+<meta property="og:title" content="VSCode + PlatformIO 开发单片机指南">
+<meta property="og:url" content="http://example.com/posts/c782148d/index.html">
+<meta property="og:site_name" content="Blog">
+<meta property="og:description" content="适用芯片： STC15F2K60S2（蓝桥杯 CT107D 开发板） 替代方案： 完全替代 Keil C51 + STC-ISP 的开发流程 前置知识： 了解基本的 C 语言和单片机概念    一、为什么选择 VSCode + PlatformIO    对比项 Keil C51 VSCode + PlatformIO     价格 需要破解激活 完全免费开源   编辑器 功能简陋，代码提示弱">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="http://example.com/img/butterfly-icon.png">
+<meta property="article:published_time" content="2026-05-13T16:00:00.000Z">
+<meta property="article:modified_time" content="2026-05-14T07:19:46.599Z">
+<meta property="article:author" content="zsl">
+<meta property="article:tag" content="单片机">
+<meta property="article:tag" content="VSCode">
+<meta property="article:tag" content="PlatformIO">
+<meta property="article:tag" content="STC15">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/img/butterfly-icon.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "VSCode + PlatformIO 开发单片机指南",
+  "url": "http://example.com/posts/c782148d/",
+  "image": "http://example.com/img/butterfly-icon.png",
+  "datePublished": "2026-05-13T16:00:00.000Z",
+  "dateModified": "2026-05-14T07:19:46.599Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "zsl",
+      "url": "http://example.com"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/butterfly-icon.png"><link rel="canonical" href="http://example.com/posts/c782148d/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.5.3"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: 'Copy Successful',
+    error: 'Copy Failed',
+    noSupport: 'Browser Not Supported'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: 'Just now',
+    min: 'minutes ago',
+    hour: 'hours ago',
+    day: 'days ago',
+    month: 'months ago'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.12.0/dist/infinitegrid.min.js',
+    buttonText: 'Load More'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'VSCode + PlatformIO 开发单片机指南',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div class="post" id="body-wrap"><header class="not-top-img" id="page-header"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><span class="site-name">Blog</span></a><a class="nav-page-title" href="/"><span class="site-name">VSCode + PlatformIO 开发单片机指南</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  Back to Home</span></span></a></span><div id="menus"></div></nav></header><main class="layout" id="content-inner"><div id="post"><div id="post-info"><h1 class="post-title">VSCode + PlatformIO 开发单片机指南</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">Created</span><time class="post-meta-date-created" datetime="2026-05-13T16:00:00.000Z" title="Created 2026-05-14 00:00:00">2026-05-14</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">Updated</span><time class="post-meta-date-updated" datetime="2026-05-14T07:19:46.599Z" title="Updated 2026-05-14 15:19:46">2026-05-14</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/%E5%8D%95%E7%89%87%E6%9C%BA%E5%AE%9E%E9%AA%8C/">单片机实验</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">Post Views:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div><article class="container post-content" id="article-container"><blockquote>
+<p><strong>适用芯片：</strong> STC15F2K60S2（蓝桥杯 CT107D 开发板）<br />
+<strong>替代方案：</strong> 完全替代 Keil C51 + STC-ISP 的开发流程<br />
+<strong>前置知识：</strong> 了解基本的 C 语言和单片机概念</p>
+</blockquote>
+<hr />
+<h2 id="一-为什么选择-vscode-platformio"><a class="markdownIt-Anchor" href="#一-为什么选择-vscode-platformio"></a> 一、为什么选择 VSCode + PlatformIO</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">对比项</th>
+<th style="text-align:left">Keil C51</th>
+<th style="text-align:left">VSCode + PlatformIO</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>价格</strong></td>
+<td style="text-align:left">需要破解激活</td>
+<td style="text-align:left">完全免费开源</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>编辑器</strong></td>
+<td style="text-align:left">功能简陋，代码提示弱</td>
+<td style="text-align:left">现代编辑器，智能补全、多光标</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>跨平台</strong></td>
+<td style="text-align:left">仅 Windows</td>
+<td style="text-align:left">Windows / macOS / Linux</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>编译器</strong></td>
+<td style="text-align:left">Keil C51 专有编译器</td>
+<td style="text-align:left">SDCC（Small Device C Compiler）</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>代码管理</strong></td>
+<td style="text-align:left">无集成</td>
+<td style="text-align:left">内置 Git 支持</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>主题</strong></td>
+<td style="text-align:left">丑</td>
+<td style="text-align:left">好看</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>插件生态</strong></td>
+<td style="text-align:left">几乎没有</td>
+<td style="text-align:left">海量插件</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<ol>
+<li>PlatformIO 使用 <strong>SDCC 编译器</strong>，语法与 Keil C51 有少量差异（详见<a href="#%E5%85%AB%E3%80%81Keil-%E4%B8%8E-PlatformIO-%E8%AF%AD%E6%B3%95%E5%B7%AE%E5%BC%82">八、Keil 与 PlatformIO 语法差异</a>）</li>
+<li>烧录仍需要 <strong>STC-ISP</strong>（或命令行工具 stcgal），PlatformIO 对 STC 单片机的烧录支持有限</li>
+<li>如果蓝桥杯比赛要求必须用 Keil，建议平时用 PlatformIO 开发调试，赛前熟悉 Keil 操作</li>
+</ol>
+</blockquote>
+<hr />
+<h2 id="二-软件安装"><a class="markdownIt-Anchor" href="#二-软件安装"></a> 二、软件安装</h2>
+<h3 id="21-安装-vscode"><a class="markdownIt-Anchor" href="#21-安装-vscode"></a> 2.1 安装 VSCode</h3>
+<ol>
+<li>
+<p><strong>下载安装包</strong></p>
+<ul>
+<li>访问官网：<a target="_blank" rel="noopener" href="https://code.visualstudio.com">https://code.visualstudio.com</a></li>
+<li>选择对应系统版本下载（Windows / macOS / Linux）</li>
+</ul>
+</li>
+<li>
+<p><strong>安装步骤</strong></p>
+<ul>
+<li>双击运行安装程序</li>
+<li><strong>建议勾选以下选项</strong>：
+<ul>
+<li><code>添加到 PATH</code>（通过 Shell 命令打开）</li>
+<li><code>在此处打开 Code</code>（右键菜单快捷方式）</li>
+</ul>
+</li>
+<li>安装路径避免中文和空格</li>
+</ul>
+</li>
+<li>
+<p><strong>推荐插件</strong>（安装完 VSCode 后先装这些）</p>
+</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">插件名</th>
+<th style="text-align:left">用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><code>PlatformIO IDE</code></td>
+<td style="text-align:left">单片机开发核心插件</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>C/C++</code></td>
+<td style="text-align:left">Microsoft 官方 C/C++ 支持</td>
+</tr>
+<tr>
+<td style="text-align:left"><code>Chinese Language Pack</code></td>
+<td style="text-align:left">中文界面（可选）</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>安装 PlatformIO IDE 插件时会自动下载 Python 依赖和工具链，首次安装可能需要 <strong>5-10 分钟</strong>，请耐心等待。</p>
+</blockquote>
+<h3 id="22-安装-platformio-ide-插件"><a class="markdownIt-Anchor" href="#22-安装-platformio-ide-插件"></a> 2.2 安装 PlatformIO IDE 插件</h3>
+<ol>
+<li>打开 VSCode</li>
+<li>点击左侧活动栏的 <strong>扩展图标</strong>（或按 <code>Ctrl + Shift + X</code>）</li>
+<li>搜索 <code>PlatformIO IDE</code></li>
+<li>点击 <code>Install</code> 安装</li>
+<li>安装完成后，左侧活动栏出现 <strong>外星人头像图标</strong>（PlatformIO Home）</li>
+<li>等待底部状态栏显示 <strong>✓ Ready</strong></li>
+</ol>
+<blockquote>
+<ul>
+<li><strong>下载慢/超时</strong>：PlatformIO 默认从 GitHub 下载工具链，如果网络不好，可设置代理：</li>
+<li>打开 VSCode 设置 → 搜索 <code>platformio</code> → 设置 HTTP Proxy</li>
+<li><strong>Python 报错</strong>：PlatformIO 依赖 Python 3.6+，确保系统已安装 Python</li>
+<li><strong>Windows 权限问题</strong>：以管理员身份运行 VSCode</li>
+</ul>
+</blockquote>
+<h3 id="23-验证安装"><a class="markdownIt-Anchor" href="#23-验证安装"></a> 2.3 验证安装</h3>
+<ol>
+<li>点击左侧 PlatformIO 图标</li>
+<li>点击 <code>PIO Home</code> → <code>Open</code></li>
+<li>能正常打开欢迎页面即安装成功</li>
+</ol>
+<hr />
+<h2 id="三-创建第一个项目"><a class="markdownIt-Anchor" href="#三-创建第一个项目"></a> 三、创建第一个项目</h2>
+<h3 id="31-新建项目"><a class="markdownIt-Anchor" href="#31-新建项目"></a> 3.1 新建项目</h3>
+<ol>
+<li>在 PlatformIO Home 页面点击 <code>New Project</code></li>
+<li>填写项目配置：</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">配置项</th>
+<th style="text-align:left">选择内容</th>
+<th style="text-align:left">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>Name</strong></td>
+<td style="text-align:left"><code>01_led_blink</code></td>
+<td style="text-align:left">项目名称，用英文和下划线</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Board</strong></td>
+<td style="text-align:left"><code>STC15F2K60S2</code></td>
+<td style="text-align:left">搜索框输入 <code>STC15</code> 筛选</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Framework</strong></td>
+<td style="text-align:left"><code>SDCC</code></td>
+<td style="text-align:left">Small Device C Compiler</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>PlatformIO 可能没有内置该板子，有两种解决方式：<br />
+<strong>方式一</strong>：选择类似的通用 8051 板子（如 <code>Generic STC15F2K60S2</code>），然后手动修改配置<br />
+<strong>方式二</strong>：在 <code>platformio.ini</code> 中手动指定芯片参数（推荐，详见下文）</p>
+</blockquote>
+<ol start="3">
+<li>点击 <code>Finish</code>，等待项目初始化完成</li>
+</ol>
+<h3 id="32-手动创建项目推荐"><a class="markdownIt-Anchor" href="#32-手动创建项目推荐"></a> 3.2 手动创建项目（推荐）</h3>
+<p>如果 PlatformIO 无法自动识别 STC15，推荐手动创建：</p>
+<ol>
+<li>新建一个文件夹，如 <code>01_led_blink</code></li>
+<li>用 VSCode 打开该文件夹</li>
+<li>手动创建以下目录结构：</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">01_led_blink/</span><br><span class="line">├── src/              # 源代码目录</span><br><span class="line">│   └── main.c        # 主程序</span><br><span class="line">├── lib/              # 自定义库目录（可选）</span><br><span class="line">├── include/          # 头文件目录（可选）</span><br><span class="line">└── platformio.ini    # 项目配置文件（核心）</span><br></pre></td></tr></table></figure>
+<ol start="4">
+<li>在项目根目录创建 <code>platformio.ini</code> 配置文件：</li>
+</ol>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">; PlatformIO 项目配置文件</span></span><br><span class="line"><span class="comment">; 芯片：STC15F2K60S2</span></span><br><span class="line"><span class="comment">; 编译器：SDCC</span></span><br><span class="line"></span><br><span class="line"><span class="section">[env:stc15f2k60s2]</span></span><br><span class="line"><span class="attr">platform</span> = intel_mcs51        <span class="comment">; 8051 平台</span></span><br><span class="line"><span class="attr">board</span> = STC15F2K60S2          <span class="comment">; 芯片型号</span></span><br><span class="line"><span class="attr">framework</span> = sdcc              <span class="comment">; 使用 SDCC 编译器</span></span><br><span class="line"></span><br><span class="line"><span class="comment">; 编译参数</span></span><br><span class="line"><span class="attr">build_flags</span> =</span><br><span class="line">  -DSTC15F2K60S2              <span class="comment">; 定义芯片宏</span></span><br><span class="line">  --opt-code-size             <span class="comment">; 优化代码体积</span></span><br><span class="line"></span><br><span class="line"><span class="comment">; 烧录配置（使用 stcgal）</span></span><br><span class="line"><span class="attr">upload_protocol</span> = stcgal</span><br><span class="line"><span class="attr">upload_port</span> = COM3            <span class="comment">; 修改为实际串口号（Windows）</span></span><br><span class="line"><span class="comment">; upload_port = /dev/ttyUSB0  ; Linux</span></span><br><span class="line"><span class="comment">; upload_port = /dev/tty.usbserial  ; macOS</span></span><br><span class="line"><span class="attr">upload_flags</span> =</span><br><span class="line">  --baud 115200               <span class="comment">; 烧录波特率</span></span><br></pre></td></tr></table></figure>
+<blockquote>
+<ul>
+<li><code>platform</code>：指定 MCU 架构平台，8051 系列用 <code>intel_mcs51</code></li>
+<li><code>board</code>：开发板型号，PlatformIO 会根据此加载对应的寄存器定义</li>
+<li><code>framework</code>：编译框架，8051 只能用 <code>sdcc</code></li>
+<li><code>upload_port</code>：串口号，需要根据实际连接修改（可在设备管理器中查看）</li>
+<li><code>upload_flags</code>：stcgal 的命令行参数，波特率通过 <code>--baud</code> 指定</li>
+</ul>
+</blockquote>
+<h3 id="33-项目目录结构详解"><a class="markdownIt-Anchor" href="#33-项目目录结构详解"></a> 3.3 项目目录结构详解</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">项目根目录/</span><br><span class="line">├── .vscode/              # VSCode 配置（自动生成）</span><br><span class="line">│   └── c_cpp_properties.json</span><br><span class="line">├── src/                  # 源代码（必须）</span><br><span class="line">│   ├── main.c            # 主程序入口</span><br><span class="line">│   └── delay.c           # 其他源文件（按需添加）</span><br><span class="line">├── include/              # 头文件</span><br><span class="line">│   └── delay.h</span><br><span class="line">├── lib/                  # 第三方/自定义库</span><br><span class="line">│   └── MyLib/</span><br><span class="line">│       ├── mylib.c</span><br><span class="line">│       └── mylib.h</span><br><span class="line">├── test/                 # 测试代码（可选）</span><br><span class="line">├── platformio.ini        # 项目配置（核心）</span><br><span class="line">└── README.md             # 项目说明（可选）</span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="四-编写第一个程序点亮-led"><a class="markdownIt-Anchor" href="#四-编写第一个程序点亮-led"></a> 四、编写第一个程序——点亮 LED</h2>
+<h3 id="41-新建源文件"><a class="markdownIt-Anchor" href="#41-新建源文件"></a> 4.1 新建源文件</h3>
+<p>在 <code>src/</code> 目录下创建 <code>main.c</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stc15f2k60s2.h&gt;</span>  <span class="comment">// STC15 系列头文件</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;intrins.h&gt;</span>        <span class="comment">// 包含 _nop_() 等内联函数</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 延时函数 @12MHz</span></span><br><span class="line"><span class="type">void</span> <span class="title function_">delay_ms</span><span class="params">(<span class="type">unsigned</span> <span class="type">int</span> ms)</span> &#123;</span><br><span class="line">  <span class="type">unsigned</span> <span class="type">char</span> i, j;</span><br><span class="line">  <span class="keyword">while</span> (ms--) &#123;</span><br><span class="line">    _nop_();</span><br><span class="line">    i = <span class="number">12</span>;</span><br><span class="line">    j = <span class="number">169</span>;</span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">      <span class="keyword">while</span> (--j);</span><br><span class="line">    &#125; <span class="keyword">while</span> (--i);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 锁存器选通宏定义</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> LED(x)   &#123; P0 = x; P2 = (P2 &amp; 0x1F) | 0x80; P2 &amp;= 0x1F; &#125;</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> BUZ(x)   &#123; P0 = x; P2 = (P2 &amp; 0x1F) | 0xA0; P2 &amp;= 0x1F; &#125;</span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">main</span><span class="params">()</span> &#123;</span><br><span class="line">  <span class="comment">// 系统初始化</span></span><br><span class="line">  BUZ(<span class="number">0x00</span>);     <span class="comment">// 关闭蜂鸣器</span></span><br><span class="line"></span><br><span class="line">  LED(<span class="number">0xFF</span>);     <span class="comment">// 初始状态：全部熄灭</span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">    LED(<span class="number">0xFE</span>);   <span class="comment">// 点亮第一个 LED（低电平点亮）</span></span><br><span class="line">    delay_ms(<span class="number">500</span>);</span><br><span class="line">    LED(<span class="number">0xFF</span>);   <span class="comment">// 全部熄灭</span></span><br><span class="line">    delay_ms(<span class="number">500</span>);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="42-编译项目"><a class="markdownIt-Anchor" href="#42-编译项目"></a> 4.2 编译项目</h3>
+<p>使用以下任一方式编译：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">方式</th>
+<th style="text-align:left">操作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>快捷键</strong></td>
+<td style="text-align:left"><code>Ctrl + Alt + B</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>状态栏</strong></td>
+<td style="text-align:left">点击底部状态栏的 ✓ 图标（Build）</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>命令面板</strong></td>
+<td style="text-align:left"><code>Ctrl + Shift + P</code> → 输入 <code>PlatformIO: Build</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>侧边栏</strong></td>
+<td style="text-align:left">PlatformIO → PROJECT TASKS → Build</td>
+</tr>
+</tbody>
+</table>
+<p>编译成功后会在底部终端显示：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">=== [SUCCESS] Took X.XX seconds ===</span><br></pre></td></tr></table></figure>
+<p>编译产物位于 <code>.pio/build/</code> 目录下，包含 <code>.hex</code> 文件。</p>
+<blockquote>
+<p>生成的 <code>.hex</code> 文件路径通常为：<br />
+<code>.pio/build/stc15f2k60s2/firmware.hex</code><br />
+该文件可以直接用 STC-ISP 烧录。</p>
+</blockquote>
+<hr />
+<h2 id="五-程序烧录"><a class="markdownIt-Anchor" href="#五-程序烧录"></a> 五、程序烧录</h2>
+<h3 id="51-方式一stc-isp-烧录推荐新手"><a class="markdownIt-Anchor" href="#51-方式一stc-isp-烧录推荐新手"></a> 5.1 方式一：STC-ISP 烧录（推荐新手）</h3>
+<p>PlatformIO 对 STC 单片机的直接烧录支持有限，推荐使用 STC-ISP 软件烧录。</p>
+<p><strong>步骤：</strong></p>
+<ol>
+<li>
+<p><strong>找到 HEX 文件</strong></p>
+<ul>
+<li>编译成功后，HEX 文件位于 <code>.pio/build/stc15f2k60s2/firmware.hex</code></li>
+<li>可以在 PlatformIO 侧边栏 → PROJECT TASKS → Build 的输出中看到完整路径</li>
+</ul>
+</li>
+<li>
+<p><strong>打开 STC-ISP</strong></p>
+<ul>
+<li>运行 <code>stc-isp-xxx.exe</code></li>
+<li>单片机型号选择：<code>IAP15F2K61S2</code></li>
+<li>时钟频率：<code>12MHz</code></li>
+</ul>
+</li>
+<li>
+<p><strong>连接单片机</strong></p>
+<ul>
+<li>用 USB 线连接开发板和电脑</li>
+<li>在 STC-ISP 中查看&quot;串口号&quot;，确认连接成功</li>
+<li>点击&quot;打开程序文件&quot;，选择上面找到的 <code>.hex</code> 文件</li>
+</ul>
+</li>
+<li>
+<p><strong>下载程序</strong></p>
+<ul>
+<li>先点击&quot;下载/编程&quot;</li>
+<li>然后给单片机重新上电（拔插 USB 或按开发板复位键）</li>
+<li>等待下载完成</li>
+</ul>
+</li>
+</ol>
+<blockquote>
+<p>STC 单片机使用<strong>冷启动烧录</strong>——必须先点击&quot;下载&quot;，再给芯片上电。这是 STC 的 ISP 下载协议决定的。</p>
+</blockquote>
+<h3 id="52-方式二命令行-stcgal-烧录"><a class="markdownIt-Anchor" href="#52-方式二命令行-stcgal-烧录"></a> 5.2 方式二：命令行 stcgal 烧录</h3>
+<p><code>stcgal</code> 是一个开源的 STC 单片机烧录命令行工具，可以在 PlatformIO 中集成。</p>
+<p><strong>安装 stcgal：</strong></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install stcgal</span><br></pre></td></tr></table></figure>
+<p><strong>手动烧录命令：</strong></p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">stcgal -p /dev/ttyUSB0 -P stc15 .pio/build/stc15f2k60s2/firmware.hex</span><br></pre></td></tr></table></figure>
+<p><strong>在 PlatformIO 中配置自动烧录：</strong></p>
+<p>在 <code>platformio.ini</code> 中添加：</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">upload_command</span> = stcgal <span class="variable">$UPLOAD_PORT</span> -P stc15 <span class="variable">$SOURCE</span></span><br></pre></td></tr></table></figure>
+<p>然后点击底部状态栏的 → 图标即可自动烧录。</p>
+<h3 id="53-方式三platformio-自带烧录实验性"><a class="markdownIt-Anchor" href="#53-方式三platformio-自带烧录实验性"></a> 5.3 方式三：PlatformIO 自带烧录（实验性）</h3>
+<p>部分 STC 型号可以通过 PlatformIO 直接烧录，在 <code>platformio.ini</code> 中配置：</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">upload_protocol</span> = stcgal</span><br><span class="line"><span class="attr">upload_port</span> = COM3</span><br><span class="line"><span class="attr">upload_flags</span> =</span><br><span class="line">  --protocol stc15</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>PlatformIO 的 STC 烧录功能仍在完善中，可能不适用于所有型号。如果烧录失败，请使用方式一（STC-ISP）。</p>
+</blockquote>
+<hr />
+<h2 id="六-常用开发操作"><a class="markdownIt-Anchor" href="#六-常用开发操作"></a> 六、常用开发操作</h2>
+<h3 id="61-快捷操作一览"><a class="markdownIt-Anchor" href="#61-快捷操作一览"></a> 6.1 快捷操作一览</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">操作</th>
+<th style="text-align:left">快捷键</th>
+<th style="text-align:left">底部图标</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>编译</strong></td>
+<td style="text-align:left"><code>Ctrl + Alt + B</code></td>
+<td style="text-align:left">✓ Build</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>烧录</strong></td>
+<td style="text-align:left"><code>Ctrl + Alt + U</code></td>
+<td style="text-align:left">→ Upload</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>串口监视器</strong></td>
+<td style="text-align:left"><code>Ctrl + Alt + S</code></td>
+<td style="text-align:left">🔌 Serial</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>清理</strong></td>
+<td style="text-align:left"><code>Ctrl + Alt + C</code></td>
+<td style="text-align:left">🗑️ Clean</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>命令面板</strong></td>
+<td style="text-align:left"><code>Ctrl + Shift + P</code></td>
+<td style="text-align:left">—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="62-串口监视器"><a class="markdownIt-Anchor" href="#62-串口监视器"></a> 6.2 串口监视器</h3>
+<p>PlatformIO 内置了串口监视器，可以替代 STC-ISP 的串口调试功能。</p>
+<p><strong>配置方式：</strong></p>
+<p>在 <code>platformio.ini</code> 中添加：</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">monitor_speed</span> = <span class="number">115200</span>       <span class="comment">; 波特率</span></span><br><span class="line"><span class="attr">monitor_filters</span> = direct     <span class="comment">; 直接输出，不做特殊处理</span></span><br><span class="line"><span class="comment">; monitor_rts = 0            ; RTS 信号控制（某些板子需要）</span></span><br><span class="line"><span class="comment">; monitor_dtr = 0            ; DTR 信号控制</span></span><br></pre></td></tr></table></figure>
+<p><strong>使用方式：</strong></p>
+<ul>
+<li>点击底部状态栏的 🔌 插头图标</li>
+<li>或按 <code>Ctrl + Alt + S</code></li>
+</ul>
+<p><strong>串口打印示例：</strong></p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stc15f2k60s2.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">uart_init</span><span class="params">()</span> &#123;</span><br><span class="line">  SCON = <span class="number">0x50</span>;       <span class="comment">// 串口模式1，允许接收</span></span><br><span class="line">  AUXR |= <span class="number">0x40</span>;      <span class="comment">// 定时器1使用1T模式</span></span><br><span class="line">  TMOD &amp;= <span class="number">0x0F</span>;</span><br><span class="line">  TL1 = <span class="number">0xE6</span>;        <span class="comment">// 12MHz @ 115200</span></span><br><span class="line">  TH1 = <span class="number">0xFE</span>;</span><br><span class="line">  TR1 = <span class="number">1</span>;           <span class="comment">// 启动定时器1</span></span><br><span class="line">  TI = <span class="number">1</span>;            <span class="comment">// 关键！SDCC printf 需要 TI=1</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">main</span><span class="params">()</span> &#123;</span><br><span class="line">  uart_init();</span><br><span class="line"></span><br><span class="line">  <span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;Hello, PlatformIO!\r\n&quot;</span>);</span><br><span class="line">    delay_ms(<span class="number">1000</span>);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>SDCC 的 <code>printf</code> 使用前必须设置 <code>TI = 1</code>，否则不会输出。这与 Keil 中的用法一致。</p>
+</blockquote>
+<h3 id="63-多文件项目"><a class="markdownIt-Anchor" href="#63-多文件项目"></a> 6.3 多文件项目</h3>
+<p>在实际开发中，通常需要将不同功能模块拆分为多个文件。</p>
+<p><strong>示例：添加延时模块</strong></p>
+<p><code>include/delay.h</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">ifndef</span> __DELAY_H__</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> __DELAY_H__</span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">delay_ms</span><span class="params">(<span class="type">unsigned</span> <span class="type">int</span> ms)</span>;</span><br><span class="line"><span class="type">void</span> <span class="title function_">delay_us</span><span class="params">(<span class="type">unsigned</span> <span class="type">int</span> us)</span>;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br></pre></td></tr></table></figure>
+<p><code>src/delay.c</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;delay.h&quot;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;intrins.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">delay_ms</span><span class="params">(<span class="type">unsigned</span> <span class="type">int</span> ms)</span> &#123;</span><br><span class="line">  <span class="type">unsigned</span> <span class="type">char</span> i, j;</span><br><span class="line">  <span class="keyword">while</span> (ms--) &#123;</span><br><span class="line">    _nop_();</span><br><span class="line">    i = <span class="number">12</span>;</span><br><span class="line">    j = <span class="number">169</span>;</span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">      <span class="keyword">while</span> (--j);</span><br><span class="line">    &#125; <span class="keyword">while</span> (--i);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>src/main.c</code>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stc15f2k60s2.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;delay.h&quot;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">main</span><span class="params">()</span> &#123;</span><br><span class="line">  <span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">    P0 = <span class="number">0xFE</span>;</span><br><span class="line">    delay_ms(<span class="number">500</span>);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>PlatformIO 会自动编译 <code>src/</code> 下的所有 <code>.c</code> 文件，并将 <code>include/</code> 目录加入头文件搜索路径。</p>
+<h3 id="64-添加自定义头文件stc-寄存器定义"><a class="markdownIt-Anchor" href="#64-添加自定义头文件stc-寄存器定义"></a> 6.4 添加自定义头文件（STC 寄存器定义）</h3>
+<p>如果 SDCC 自带的 <code>stc15f2k60s2.h</code> 缺少某些寄存器定义，可以手动添加：</p>
+<ol>
+<li>将自定义头文件放入 <code>include/</code> 目录</li>
+<li>在 <code>platformio.ini</code> 中确保 include 路径配置正确：</li>
+</ol>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">build_flags</span> =</span><br><span class="line">  -I include             <span class="comment">; 添加 include 目录到搜索路径</span></span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="七-完整项目配置模板"><a class="markdownIt-Anchor" href="#七-完整项目配置模板"></a> 七、完整项目配置模板</h2>
+<p>以下是针对蓝桥杯 CT107D 开发板的完整 <code>platformio.ini</code> 配置模板：</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">; ============================================================</span></span><br><span class="line"><span class="comment">; PlatformIO 配置 - STC15F2K60S2 (蓝桥杯 CT107D 开发板)</span></span><br><span class="line"><span class="comment">; ============================================================</span></span><br><span class="line"></span><br><span class="line"><span class="section">[platformio]</span></span><br><span class="line"><span class="attr">default_envs</span> = stc15</span><br><span class="line"></span><br><span class="line"><span class="section">[env:stc15]</span></span><br><span class="line"><span class="comment">; ---- 平台与框架 ----</span></span><br><span class="line"><span class="attr">platform</span> = intel_mcs51</span><br><span class="line"><span class="attr">board</span> = STC15F2K60S2</span><br><span class="line"><span class="attr">framework</span> = sdcc</span><br><span class="line"></span><br><span class="line"><span class="comment">; ---- 编译选项 ----</span></span><br><span class="line"><span class="attr">build_flags</span> =</span><br><span class="line">  -DSTC15F2K60S2</span><br><span class="line">  --opt-code-size</span><br><span class="line">  --model-large                <span class="comment">; 大内存模型（可选）</span></span><br><span class="line"></span><br><span class="line"><span class="comment">; ---- 烧录选项 ----</span></span><br><span class="line"><span class="attr">upload_protocol</span> = stcgal</span><br><span class="line"><span class="attr">upload_port</span> = COM3             <span class="comment">; !! 修改为你的串口号 !!</span></span><br><span class="line"><span class="attr">upload_flags</span> =</span><br><span class="line">  --baud 115200</span><br><span class="line"></span><br><span class="line"><span class="comment">; ---- 串口监视器 ----</span></span><br><span class="line"><span class="attr">monitor_speed</span> = <span class="number">115200</span></span><br><span class="line"><span class="attr">monitor_filters</span> = direct</span><br><span class="line"></span><br><span class="line"><span class="comment">; ---- 自定义烧录命令（备选）----</span></span><br><span class="line"><span class="comment">; upload_command = stcgal -P stc15 $UPLOAD_PORT $SOURCE</span></span><br></pre></td></tr></table></figure>
+<blockquote>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">competition_project/</span><br><span class="line">├── src/</span><br><span class="line">│   ├── main.c           # 主逻辑</span><br><span class="line">│   ├── timer.c           # 定时器配置</span><br><span class="line">│   ├── smg.c             # 数码管驱动</span><br><span class="line">│   ├── key.c             # 按键扫描</span><br><span class="line">│   ├── ds1302.c          # DS1302 时钟</span><br><span class="line">│   ├── ds18b20.c         # DS18B20 温度</span><br><span class="line">│   ├── iic.c             # I2C 通信（PCF8591/AT24C02）</span><br><span class="line">│   └── onewire.c         # 单总线（DS18B20）</span><br><span class="line">├── include/</span><br><span class="line">│   ├── timer.h</span><br><span class="line">│   ├── smg.h</span><br><span class="line">│   ├── key.h</span><br><span class="line">│   ├── ds1302.h</span><br><span class="line">│   ├── ds18b20.h</span><br><span class="line">│   ├── iic.h</span><br><span class="line">│   └── onewire.h</span><br><span class="line">├── lib/</span><br><span class="line">│   └── CT107D/            # 开发板底层驱动</span><br><span class="line">│       ├── ct107d.c</span><br><span class="line">│       └── ct107d.h</span><br><span class="line">└── platformio.ini</span><br></pre></td></tr></table></figure>
+</blockquote>
+<hr />
+<h2 id="八-keil-与-platformio-语法差异"><a class="markdownIt-Anchor" href="#八-keil-与-platformio-语法差异"></a> 八、Keil 与 PlatformIO 语法差异</h2>
+<blockquote>
+<p>SDCC 和 Keil C51 的语法有差异，如果直接将 Keil 代码复制到 PlatformIO 中，<strong>需要做以下修改</strong>。</p>
+</blockquote>
+<h3 id="81-头文件"><a class="markdownIt-Anchor" href="#81-头文件"></a> 8.1 头文件</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Keil C51</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;STC15F2K60S2.H&gt;</span>     <span class="comment">// 大写</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">// SDCC (PlatformIO)</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stc15f2k60s2.h&gt;</span>     <span class="comment">// 小写</span></span></span><br></pre></td></tr></table></figure>
+<h3 id="82-特殊功能寄存器sfr定义"><a class="markdownIt-Anchor" href="#82-特殊功能寄存器sfr定义"></a> 8.2 特殊功能寄存器（SFR）定义</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Keil C51</span></span><br><span class="line">sbit LED = P0^<span class="number">0</span>;               <span class="comment">// sbit 关键字，用 ^ 引用位</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// SDCC</span></span><br><span class="line"><span class="comment">// 方式一：使用头文件中已定义的位名称（推荐）</span></span><br><span class="line">P0_0 = <span class="number">1</span>;                      <span class="comment">// 直接操作，stc15f2k60s2.h 中已定义</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 方式二：用 __sbit 手动定义（需指定位地址）</span></span><br><span class="line">__sbit __at(<span class="number">0x80</span>) MY_LED;      <span class="comment">// 0x80 = P0.0 的位地址</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 方式三：用宏定义</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> LED P0_0</span></span><br></pre></td></tr></table></figure>
+<h3 id="83-中断函数"><a class="markdownIt-Anchor" href="#83-中断函数"></a> 8.3 中断函数</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Keil C51</span></span><br><span class="line"><span class="type">void</span> <span class="title function_">Timer0_ISR</span><span class="params">()</span> interrupt 1 &#123;</span><br><span class="line">  <span class="comment">// 中断处理</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// SDCC</span></span><br><span class="line"><span class="type">void</span> <span class="title function_">Timer0_ISR</span><span class="params">()</span> __<span class="title function_">interrupt</span><span class="params">(<span class="number">1</span>)</span> &#123;</span><br><span class="line">  <span class="comment">// 中断处理</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="84-存储类型"><a class="markdownIt-Anchor" href="#84-存储类型"></a> 8.4 存储类型</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Keil C51</span></span><br><span class="line"><span class="type">unsigned</span> <span class="type">char</span> code table[] = &#123;...&#125;;    <span class="comment">// code 放在 ROM</span></span><br><span class="line"><span class="type">unsigned</span> <span class="type">char</span> xdata buf[<span class="number">100</span>];          <span class="comment">// xdata 外部 RAM</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// SDCC</span></span><br><span class="line">__code <span class="type">unsigned</span> <span class="type">char</span> table[] = &#123;...&#125;;  <span class="comment">// __code 放在 ROM</span></span><br><span class="line">__xdata <span class="type">unsigned</span> <span class="type">char</span> buf[<span class="number">100</span>];        <span class="comment">// __xdata 外部 RAM</span></span><br></pre></td></tr></table></figure>
+<h3 id="85-内联函数"><a class="markdownIt-Anchor" href="#85-内联函数"></a> 8.5 内联函数</h3>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Keil C51</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;intrins.h&gt;</span></span></span><br><span class="line">_nop_();                        <span class="comment">// 空操作（SDCC 同样支持）</span></span><br><span class="line">_crol_(a, <span class="number">1</span>);                   <span class="comment">// 循环左移（Keil 特有）</span></span><br><span class="line">_cror_(a, <span class="number">1</span>);                   <span class="comment">// 循环右移（Keil 特有）</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// SDCC</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;intrins.h&gt;</span></span></span><br><span class="line">_nop_();                        <span class="comment">// 空操作（与 Keil 相同）</span></span><br><span class="line"><span class="comment">// SDCC 没有 _crol_ / _cror_，需要用移位运算替代：</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 循环左移 1 位（等价于 _crol_(a, 1)）</span></span><br><span class="line">a = (a &lt;&lt; <span class="number">1</span>) | (a &gt;&gt; <span class="number">7</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">// 循环右移 1 位（等价于 _cror_(a, 1)）</span></span><br><span class="line">a = (a &gt;&gt; <span class="number">1</span>) | (a &lt;&lt; <span class="number">7</span>);</span><br></pre></td></tr></table></figure>
+<h3 id="86-差异速查表"><a class="markdownIt-Anchor" href="#86-差异速查表"></a> 8.6 差异速查表</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">项目</th>
+<th style="text-align:left">Keil C51</th>
+<th style="text-align:left">SDCC (PlatformIO)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">位定义</td>
+<td style="text-align:left"><code>sbit</code></td>
+<td style="text-align:left"><code>__sbit __at(地址)</code> 或直接用 <code>P0_0</code></td>
+</tr>
+<tr>
+<td style="text-align:left">中断</td>
+<td style="text-align:left"><code>interrupt n</code></td>
+<td style="text-align:left"><code>__interrupt(n)</code></td>
+</tr>
+<tr>
+<td style="text-align:left">ROM 存储</td>
+<td style="text-align:left"><code>code</code></td>
+<td style="text-align:left"><code>__code</code></td>
+</tr>
+<tr>
+<td style="text-align:left">外部 RAM</td>
+<td style="text-align:left"><code>xdata</code></td>
+<td style="text-align:left"><code>__xdata</code></td>
+</tr>
+<tr>
+<td style="text-align:left">内部 RAM</td>
+<td style="text-align:left"><code>idata</code></td>
+<td style="text-align:left"><code>__idata</code></td>
+</tr>
+<tr>
+<td style="text-align:left">可重入</td>
+<td style="text-align:left"><code>reentrant</code></td>
+<td style="text-align:left"><code>__reentrant</code></td>
+</tr>
+<tr>
+<td style="text-align:left">头文件名</td>
+<td style="text-align:left">大写 <code>.H</code></td>
+<td style="text-align:left">小写 <code>.h</code></td>
+</tr>
+<tr>
+<td style="text-align:left">SFR 位引用</td>
+<td style="text-align:left"><code>P0^0</code></td>
+<td style="text-align:left"><code>P0_0</code></td>
+</tr>
+<tr>
+<td style="text-align:left">循环移位</td>
+<td style="text-align:left"><code>_crol_</code> / <code>_cror_</code></td>
+<td style="text-align:left">手动位移运算替代</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>如果不想逐个修改语法差异，可以在 <code>platformio.ini</code> 中添加 SDCC 的 <code>--std-sdcc11</code> 或 <code>--std-sdcc89</code> 选项来控制标准兼容性。但最稳妥的方式还是按照上表手动调整。</p>
+</blockquote>
+<hr />
+<h2 id="九-常见问题与解决方案"><a class="markdownIt-Anchor" href="#九-常见问题与解决方案"></a> 九、常见问题与解决方案</h2>
+<h3 id="q1编译报错-fatal-error-stc15f2k60s2h-no-such-file"><a class="markdownIt-Anchor" href="#q1编译报错-fatal-error-stc15f2k60s2h-no-such-file"></a> Q1：编译报错 <code>fatal error: stc15f2k60s2.h: No such file</code></h3>
+<p><strong>原因：</strong> SDCC 的头文件路径不对或未安装对应的设备包。</p>
+<p><strong>解决：</strong></p>
+<ol>
+<li>确认 <code>platformio.ini</code> 中 <code>board = STC15F2K60S2</code> 配置正确</li>
+<li>手动下载头文件放入 <code>include/</code> 目录</li>
+<li>或者在 PlatformIO Home → Platforms 中安装 <code>intel_mcs51</code> 平台</li>
+</ol>
+<h3 id="q2编译报错关于-sbit-interrupt-等关键字"><a class="markdownIt-Anchor" href="#q2编译报错关于-sbit-interrupt-等关键字"></a> Q2：编译报错关于 <code>sbit</code>、<code>interrupt</code> 等关键字</h3>
+<p><strong>原因：</strong> SDCC 语法与 Keil 不同。</p>
+<p><strong>解决：</strong> 按照<a href="#%E5%85%AB%E3%80%81Keil-%E4%B8%8E-PlatformIO-%E8%AF%AD%E6%B3%95%E5%B7%AE%E5%BC%82">八、Keil 与 PlatformIO 语法差异</a>修改代码。</p>
+<h3 id="q3烧录失败提示串口错误"><a class="markdownIt-Anchor" href="#q3烧录失败提示串口错误"></a> Q3：烧录失败，提示串口错误</h3>
+<p><strong>原因：</strong> 串口号配置错误或驱动未安装。</p>
+<p><strong>解决：</strong></p>
+<ol>
+<li><strong>Windows</strong>：在设备管理器 → 端口(COM 和 LPT) 中查看实际串口号</li>
+<li><strong>Linux/macOS</strong>：运行 <code>ls /dev/tty*</code> 查看串口设备</li>
+<li>确认已安装 CH340/CP2102 等 USB 转串口驱动</li>
+<li>修改 <code>platformio.ini</code> 中的 <code>upload_port</code> 为正确的串口号</li>
+</ol>
+<h3 id="q4platformio-找不到-stc15-开发板"><a class="markdownIt-Anchor" href="#q4platformio-找不到-stc15-开发板"></a> Q4：PlatformIO 找不到 STC15 开发板</h3>
+<p><strong>解决：</strong> 手动创建项目，在 <code>platformio.ini</code> 中指定通用 8051 平台配置。</p>
+<figure class="highlight ini"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[env:generic_8051]</span></span><br><span class="line"><span class="attr">platform</span> = intel_mcs51</span><br><span class="line"><span class="attr">board</span> = STC15F2K60S2</span><br><span class="line"><span class="attr">framework</span> = sdcc</span><br></pre></td></tr></table></figure>
+<h3 id="q5中文注释乱码"><a class="markdownIt-Anchor" href="#q5中文注释乱码"></a> Q5：中文注释乱码</h3>
+<p><strong>解决：</strong></p>
+<ol>
+<li>确保 <code>.c</code> 文件使用 <strong>UTF-8 编码</strong>保存</li>
+<li>VSCode 右下角状态栏可切换编码格式</li>
+<li>SDCC 默认支持 UTF-8，比 Keil 的 ANSI 编码更好</li>
+</ol>
+<h3 id="q6代码补全不生效"><a class="markdownIt-Anchor" href="#q6代码补全不生效"></a> Q6：代码补全不生效</h3>
+<p><strong>解决：</strong></p>
+<ol>
+<li>安装 <code>C/C++</code> 扩展（Microsoft 官方）</li>
+<li>运行一次编译（<code>Ctrl + Alt + B</code>），让 PlatformIO 生成 <code>c_cpp_properties.json</code></li>
+<li>如果仍不生效，按 <code>Ctrl + Shift + P</code> → <code>C/C++: Edit Configurations</code> 手动添加 include 路径</li>
+</ol>
+<hr />
+<h2 id="十-开发工作流总结"><a class="markdownIt-Anchor" href="#十-开发工作流总结"></a> 十、开发工作流总结</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">graph LR</span><br><span class="line">    A[编写代码] --&gt; B[编译 Build]</span><br><span class="line">    B --&gt; C&#123;编译通过?&#125;</span><br><span class="line">    C --&gt;|是| D[生成 HEX 文件]</span><br><span class="line">    C --&gt;|否| E[查看错误信息]</span><br><span class="line">    E --&gt; A</span><br><span class="line">    D --&gt; F[STC-ISP 烧录]</span><br><span class="line">    F --&gt; G[观察运行结果]</span><br><span class="line">    G --&gt; H&#123;功能正常?&#125;</span><br><span class="line">    H --&gt;|是| I[完成]</span><br><span class="line">    H --&gt;|否| A</span><br></pre></td></tr></table></figure>
+<blockquote>
+<ol>
+<li>在 VSCode + PlatformIO 中<strong>编写和编译</strong>代码（享受智能补全和现代编辑器）</li>
+<li>使用 <strong>STC-ISP</strong> 烧录（稳定可靠）</li>
+<li>利用 PlatformIO 的<strong>串口监视器</strong>调试输出</li>
+<li>使用 VSCode 内置 <strong>Git</strong> 管理代码版本</li>
+</ol>
+</blockquote>
+<hr />
+<h2 id="十一-参考资源"><a class="markdownIt-Anchor" href="#十一-参考资源"></a> 十一、参考资源</h2>
+<ul>
+<li>Keil C51 安装指南 — 传统 Keil 开发环境搭建</li>
+<li>蓝桥杯 CT107D 实战指南 — 开发板各模块使用详解</li>
+<li>PlatformIO 官方文档：<a target="_blank" rel="noopener" href="https://docs.platformio.org">https://docs.platformio.org</a></li>
+<li>SDCC 官方文档：<a target="_blank" rel="noopener" href="https://sdcc.sourceforge.net">https://sdcc.sourceforge.net</a></li>
+<li>stcgal 烧录工具：<a target="_blank" rel="noopener" href="https://github.com/grigorig/stcgal">https://github.com/grigorig/stcgal</a></li>
+</ul>
+<blockquote>
+<p>PlatformIO 的优势在于现代化的开发体验，但烧录环节仍依赖 STC-ISP。对于蓝桥杯参赛者，建议<strong>日常开发用 PlatformIO 提高效率，赛前熟悉 Keil 操作</strong>，做到两种工具都能用。</p>
+</blockquote>
+</article><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/%E5%8D%95%E7%89%87%E6%9C%BA/">单片机</a><a class="post-meta__tags" href="/tags/VSCode/">VSCode</a><a class="post-meta__tags" href="/tags/PlatformIO/">PlatformIO</a><a class="post-meta__tags" href="/tags/STC15/">STC15</a></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related full-width" href="/posts/d61a7e97/" title="实验6 动态路由配置（RIP、OSPF）"><div class="cover" style="background: var(--default-bg-color)"></div><div class="info text-right"><div class="info-1"><div class="info-item-1">Next</div><div class="info-item-2">实验6 动态路由配置（RIP、OSPF）</div></div><div class="info-2"><div class="info-item-1"> 一、实验目的  理解路由的基本概念，区分静态路由与动态路由的区别。 掌握静态路由的配置方法及路由表的查看方式。 掌握 RIP（Routing Information Protocol）协议的配置流程，理解其工作原理。 掌握 OSPF（Open Shortest Path First）协议的配置流程，理解区域划分的概念。 能够对比三种路由方式的异同，并能通过 ping 命令验证网络连通性。   二、实验环境  硬件：个人电脑（建议内存 8G 以上，以流畅运行 eNSP）。 软件：  eNSP V100R003 或更高版本。 Wireshark（用于后续协议分析）。 VirtualBox（eNSP 运行底座）。     三、实验内容及步骤、结果  1. 拓扑搭建  操作：  打开 eNSP，新建拓扑。 在左侧设备栏选择 路由器 (Router)，拖入两台 AR2220 路由器。 选择 终端 (End Device)，拖入两台 PC 终端机。 使用 连接线 (Copper)，将 PC1 连接至路由器 R1 的 GigabitEthernet 0/0/0，PC2 连接至路由器 R2 的...</div></div></div></a></nav></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/butterfly-icon.png" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">zsl</div><div class="author-info-description"></div><div class="site-data"><a href="/archives/"><div class="headline">Articles</div><div class="length-num">19</div></a><a href="/tags/"><div class="headline">Tags</div><div class="length-num">40</div></a><a href="/categories/"><div class="headline">Categories</div><div class="length-num">3</div></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>Announcement</span></div><div class="announcement_content">This is my Blog</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>Contents</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%80%89%E6%8B%A9-vscode-platformio"><span class="toc-number">1.</span> <span class="toc-text"> 一、为什么选择 VSCode + PlatformIO</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C-%E8%BD%AF%E4%BB%B6%E5%AE%89%E8%A3%85"><span class="toc-number">2.</span> <span class="toc-text"> 二、软件安装</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#21-%E5%AE%89%E8%A3%85-vscode"><span class="toc-number">2.1.</span> <span class="toc-text"> 2.1 安装 VSCode</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#22-%E5%AE%89%E8%A3%85-platformio-ide-%E6%8F%92%E4%BB%B6"><span class="toc-number">2.2.</span> <span class="toc-text"> 2.2 安装 PlatformIO IDE 插件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#23-%E9%AA%8C%E8%AF%81%E5%AE%89%E8%A3%85"><span class="toc-number">2.3.</span> <span class="toc-text"> 2.3 验证安装</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89-%E5%88%9B%E5%BB%BA%E7%AC%AC%E4%B8%80%E4%B8%AA%E9%A1%B9%E7%9B%AE"><span class="toc-number">3.</span> <span class="toc-text"> 三、创建第一个项目</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#31-%E6%96%B0%E5%BB%BA%E9%A1%B9%E7%9B%AE"><span class="toc-number">3.1.</span> <span class="toc-text"> 3.1 新建项目</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#32-%E6%89%8B%E5%8A%A8%E5%88%9B%E5%BB%BA%E9%A1%B9%E7%9B%AE%E6%8E%A8%E8%8D%90"><span class="toc-number">3.2.</span> <span class="toc-text"> 3.2 手动创建项目（推荐）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#33-%E9%A1%B9%E7%9B%AE%E7%9B%AE%E5%BD%95%E7%BB%93%E6%9E%84%E8%AF%A6%E8%A7%A3"><span class="toc-number">3.3.</span> <span class="toc-text"> 3.3 项目目录结构详解</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B-%E7%BC%96%E5%86%99%E7%AC%AC%E4%B8%80%E4%B8%AA%E7%A8%8B%E5%BA%8F%E7%82%B9%E4%BA%AE-led"><span class="toc-number">4.</span> <span class="toc-text"> 四、编写第一个程序——点亮 LED</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#41-%E6%96%B0%E5%BB%BA%E6%BA%90%E6%96%87%E4%BB%B6"><span class="toc-number">4.1.</span> <span class="toc-text"> 4.1 新建源文件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#42-%E7%BC%96%E8%AF%91%E9%A1%B9%E7%9B%AE"><span class="toc-number">4.2.</span> <span class="toc-text"> 4.2 编译项目</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94-%E7%A8%8B%E5%BA%8F%E7%83%A7%E5%BD%95"><span class="toc-number">5.</span> <span class="toc-text"> 五、程序烧录</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#51-%E6%96%B9%E5%BC%8F%E4%B8%80stc-isp-%E7%83%A7%E5%BD%95%E6%8E%A8%E8%8D%90%E6%96%B0%E6%89%8B"><span class="toc-number">5.1.</span> <span class="toc-text"> 5.1 方式一：STC-ISP 烧录（推荐新手）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#52-%E6%96%B9%E5%BC%8F%E4%BA%8C%E5%91%BD%E4%BB%A4%E8%A1%8C-stcgal-%E7%83%A7%E5%BD%95"><span class="toc-number">5.2.</span> <span class="toc-text"> 5.2 方式二：命令行 stcgal 烧录</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#53-%E6%96%B9%E5%BC%8F%E4%B8%89platformio-%E8%87%AA%E5%B8%A6%E7%83%A7%E5%BD%95%E5%AE%9E%E9%AA%8C%E6%80%A7"><span class="toc-number">5.3.</span> <span class="toc-text"> 5.3 方式三：PlatformIO 自带烧录（实验性）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD-%E5%B8%B8%E7%94%A8%E5%BC%80%E5%8F%91%E6%93%8D%E4%BD%9C"><span class="toc-number">6.</span> <span class="toc-text"> 六、常用开发操作</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#61-%E5%BF%AB%E6%8D%B7%E6%93%8D%E4%BD%9C%E4%B8%80%E8%A7%88"><span class="toc-number">6.1.</span> <span class="toc-text"> 6.1 快捷操作一览</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#62-%E4%B8%B2%E5%8F%A3%E7%9B%91%E8%A7%86%E5%99%A8"><span class="toc-number">6.2.</span> <span class="toc-text"> 6.2 串口监视器</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#63-%E5%A4%9A%E6%96%87%E4%BB%B6%E9%A1%B9%E7%9B%AE"><span class="toc-number">6.3.</span> <span class="toc-text"> 6.3 多文件项目</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#64-%E6%B7%BB%E5%8A%A0%E8%87%AA%E5%AE%9A%E4%B9%89%E5%A4%B4%E6%96%87%E4%BB%B6stc-%E5%AF%84%E5%AD%98%E5%99%A8%E5%AE%9A%E4%B9%89"><span class="toc-number">6.4.</span> <span class="toc-text"> 6.4 添加自定义头文件（STC 寄存器定义）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83-%E5%AE%8C%E6%95%B4%E9%A1%B9%E7%9B%AE%E9%85%8D%E7%BD%AE%E6%A8%A1%E6%9D%BF"><span class="toc-number">7.</span> <span class="toc-text"> 七、完整项目配置模板</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AB-keil-%E4%B8%8E-platformio-%E8%AF%AD%E6%B3%95%E5%B7%AE%E5%BC%82"><span class="toc-number">8.</span> <span class="toc-text"> 八、Keil 与 PlatformIO 语法差异</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#81-%E5%A4%B4%E6%96%87%E4%BB%B6"><span class="toc-number">8.1.</span> <span class="toc-text"> 8.1 头文件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#82-%E7%89%B9%E6%AE%8A%E5%8A%9F%E8%83%BD%E5%AF%84%E5%AD%98%E5%99%A8sfr%E5%AE%9A%E4%B9%89"><span class="toc-number">8.2.</span> <span class="toc-text"> 8.2 特殊功能寄存器（SFR）定义</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#83-%E4%B8%AD%E6%96%AD%E5%87%BD%E6%95%B0"><span class="toc-number">8.3.</span> <span class="toc-text"> 8.3 中断函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#84-%E5%AD%98%E5%82%A8%E7%B1%BB%E5%9E%8B"><span class="toc-number">8.4.</span> <span class="toc-text"> 8.4 存储类型</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#85-%E5%86%85%E8%81%94%E5%87%BD%E6%95%B0"><span class="toc-number">8.5.</span> <span class="toc-text"> 8.5 内联函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#86-%E5%B7%AE%E5%BC%82%E9%80%9F%E6%9F%A5%E8%A1%A8"><span class="toc-number">8.6.</span> <span class="toc-text"> 8.6 差异速查表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B9%9D-%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E4%B8%8E%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-number">9.</span> <span class="toc-text"> 九、常见问题与解决方案</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#q1%E7%BC%96%E8%AF%91%E6%8A%A5%E9%94%99-fatal-error-stc15f2k60s2h-no-such-file"><span class="toc-number">9.1.</span> <span class="toc-text"> Q1：编译报错 fatal error: stc15f2k60s2.h: No such file</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#q2%E7%BC%96%E8%AF%91%E6%8A%A5%E9%94%99%E5%85%B3%E4%BA%8E-sbit-interrupt-%E7%AD%89%E5%85%B3%E9%94%AE%E5%AD%97"><span class="toc-number">9.2.</span> <span class="toc-text"> Q2：编译报错关于 sbit、interrupt 等关键字</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#q3%E7%83%A7%E5%BD%95%E5%A4%B1%E8%B4%A5%E6%8F%90%E7%A4%BA%E4%B8%B2%E5%8F%A3%E9%94%99%E8%AF%AF"><span class="toc-number">9.3.</span> <span class="toc-text"> Q3：烧录失败，提示串口错误</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#q4platformio-%E6%89%BE%E4%B8%8D%E5%88%B0-stc15-%E5%BC%80%E5%8F%91%E6%9D%BF"><span class="toc-number">9.4.</span> <span class="toc-text"> Q4：PlatformIO 找不到 STC15 开发板</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#q5%E4%B8%AD%E6%96%87%E6%B3%A8%E9%87%8A%E4%B9%B1%E7%A0%81"><span class="toc-number">9.5.</span> <span class="toc-text"> Q5：中文注释乱码</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#q6%E4%BB%A3%E7%A0%81%E8%A1%A5%E5%85%A8%E4%B8%8D%E7%94%9F%E6%95%88"><span class="toc-number">9.6.</span> <span class="toc-text"> Q6：代码补全不生效</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81-%E5%BC%80%E5%8F%91%E5%B7%A5%E4%BD%9C%E6%B5%81%E6%80%BB%E7%BB%93"><span class="toc-number">10.</span> <span class="toc-text"> 十、开发工作流总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8D%81%E4%B8%80-%E5%8F%82%E8%80%83%E8%B5%84%E6%BA%90"><span class="toc-number">11.</span> <span class="toc-text"> 十一、参考资源</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>Recent Posts</span></div><div class="aside-list"><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/posts/c782148d/" title="VSCode + PlatformIO 开发单片机指南">VSCode + PlatformIO 开发单片机指南</a><time datetime="2026-05-13T16:00:00.000Z" title="Created 2026-05-14 00:00:00">2026-05-14</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/posts/1d13eaf8/" title="Keil C51 开发环境安装指南">Keil C51 开发环境安装指南</a><time datetime="2026-04-27T16:00:00.000Z" title="Created 2026-04-28 00:00:00">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/posts/8fe31ce0/" title="01 流水灯实验">01 流水灯实验</a><time datetime="2026-04-27T16:00:00.000Z" title="Created 2026-04-28 00:00:00">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/posts/dfbb8e59/" title="03 定时器实验">03 定时器实验</a><time datetime="2026-04-27T16:00:00.000Z" title="Created 2026-04-28 00:00:00">2026-04-28</time></div></div><div class="aside-list-item no-cover"><div class="content"><a class="title" href="/posts/b8af754d/" title="02 外部中断控制实验">02 外部中断控制实验</a><time datetime="2026-04-27T16:00:00.000Z" title="Created 2026-04-28 00:00:00">2026-04-28</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By zsl</span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="Reading Mode"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="Toggle Between Light and Dark Mode"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="Toggle Between Single-column and Double-column"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="Settings"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="Table of Contents"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="Back to Top"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.3"></script><script src="/js/main.js?v=5.5.3"></script><div class="js-pjax"><script>(async () => {
+  const showKatex = () => {
+    document.querySelectorAll('#article-container .katex').forEach(el => el.classList.add('katex-show'))
+  }
+
+  if (!window.katex_js_css) {
+    window.katex_js_css = true
+    await btf.getCSS('https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css')
+    if (false) {
+      await btf.getScript('https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/contrib/copy-tex.min.js')
+    }
+  }
+
+  showKatex()
+})()</script></div><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
